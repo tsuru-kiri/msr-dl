@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "monster-siren-downloader"
+name = "msr-dl"
 version = "0.1.0"
 description = "Download Monster Siren albums with metadata and synchronized lyrics"
 readme = "README.md"
