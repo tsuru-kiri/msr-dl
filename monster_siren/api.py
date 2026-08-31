@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -75,7 +75,7 @@ class MonsterSirenAPI:
         return data
 
     def get_album_detail(self, cid: str) -> dict[str, Any]:
-        data = self._get_json(f"{BASE_URL}/api/album/{cid}/detail")
+        data = self._get_json(f"{BASE_URL}/api/album/{quote(cid, safe='')}/detail")
         if not isinstance(data, dict) or not isinstance(data.get("songs"), list):
             raise ValueError(f"Invalid album detail for {cid}")
         for song in data["songs"]:
@@ -83,7 +83,7 @@ class MonsterSirenAPI:
         return data
 
     def get_song_detail(self, cid: str) -> dict[str, Any]:
-        data = self._get_json(f"{BASE_URL}/api/song/{cid}")
+        data = self._get_json(f"{BASE_URL}/api/song/{quote(cid, safe='')}")
         if not isinstance(data, dict) or not isinstance(data.get("sourceUrl"), str):
             raise ValueError(f"Invalid song detail for {cid}")
         return data

@@ -2,49 +2,135 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from unicodedata import combining, east_asian_width
 
+from monster_siren import __version__
+from monster_siren.api import MonsterSirenAPI
 from monster_siren.downloader import Downloader, DownloaderConfig
 
+try:
+    VERSION = version("msr-dl")
+except PackageNotFoundError:
+    VERSION = __version__
 
-def parse_args() -> argparse.Namespace:
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download Monster Siren albums with metadata and lyrics."
+        prog="msr-dl",
+        description="Download Monster Siren albums with metadata and lyrics.",
     )
-    parser.add_argument(
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    subparsers = parser.add_subparsers(dest="command")
+
+    download = subparsers.add_parser("download", help="Download albums or songs.")
+    download.add_argument(
         "--output",
         type=Path,
         default=Path("./MonsterSiren"),
         help="Download directory (default: ./MonsterSiren)",
     )
-    parser.add_argument(
+    download.add_argument(
         "--workers",
         type=int,
         default=4,
         help="Number of albums to process concurrently (default: 4)",
     )
-    parser.add_argument(
+    targets = download.add_mutually_exclusive_group()
+    targets.add_argument(
         "--album",
         action="append",
         default=[],
         help="Only download albums whose name contains this text. Repeatable.",
     )
-    parser.add_argument(
+    targets.add_argument("--album-cid", help="Download the album with this CID.")
+    targets.add_argument("--song-cid", help="Download the song with this CID.")
+    download.add_argument(
         "--force",
         action="store_true",
         help="Redownload songs even when state says they are complete.",
     )
-    parser.add_argument(
+    download.add_argument(
         "--no-lyrics",
         action="store_true",
         help="Do not download or embed lyrics.",
     )
-    parser.add_argument(
+    download.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug logging.",
     )
-    return parser.parse_args()
+
+    listing = subparsers.add_parser("list", help="List albums or an album's songs.")
+    listing.add_argument("--album-cid", help="List songs in the album with this CID.")
+    listing.add_argument("--verbose", action="store_true", help="Enable debug logging.")
+
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments or arguments[0] not in {
+        "download",
+        "list",
+        "-h",
+        "--help",
+        "--version",
+    }:
+        arguments.insert(0, "download")
+    return parser.parse_args(arguments)
+
+
+def list_catalog(album_cid: str | None) -> int:
+    with MonsterSirenAPI() as api:
+        if album_cid is None:
+            rows = [
+                (
+                    album["cid"],
+                    album["name"],
+                    ", ".join(Downloader._string_list(album.get("artistes"))) or "-",
+                )
+                for album in api.get_albums()
+            ]
+            print(_format_table(("CID", "ALBUM NAME", "ARTISTS"), rows))
+            return 0
+
+        detail = api.get_album_detail(album_cid)
+        rows = [
+            (
+                f"{number:02d}",
+                song["cid"],
+                song["name"],
+                ", ".join(Downloader._string_list(song.get("artistes"))) or "-",
+            )
+            for number, song in enumerate(detail["songs"], start=1)
+        ]
+        print(_format_table(("TRACK", "CID", "SONG NAME", "ARTISTS"), rows))
+    return 0
+
+
+def _display_width(value: str) -> int:
+    width = 0
+    for character in value:
+        if not combining(character):
+            width += 2 if east_asian_width(character) in {"F", "W"} else 1
+    return width
+
+
+def _format_table(headers: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
+    widths = [
+        max(_display_width(cell) for cell in column)
+        for column in zip(headers, *rows, strict=True)
+    ]
+
+    def format_row(row: tuple[str, ...]) -> str:
+        return " | ".join(
+            f"{cell}{' ' * (width - _display_width(cell))}"
+            for cell, width in zip(row, widths, strict=True)
+        )
+
+    separator = "-+-".join("-" * width for width in widths)
+    return "\n".join(
+        (format_row(headers), separator, *(format_row(row) for row in rows))
+    )
 
 
 def main() -> int:
@@ -54,10 +140,19 @@ def main() -> int:
         format="%(asctime)s | %(levelname)s | %(message)s",
     )
 
+    if args.command == "list":
+        try:
+            return list_catalog(args.album_cid)
+        except Exception:
+            logging.exception("Could not retrieve catalog information.")
+            return 1
+
     config = DownloaderConfig(
         output_dir=args.output,
         workers=max(1, args.workers),
         album_filters=tuple(args.album),
+        album_cid=args.album_cid,
+        song_cid=args.song_cid,
         force=args.force,
         download_lyrics=not args.no_lyrics,
     )

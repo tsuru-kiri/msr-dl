@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image
 
@@ -112,6 +112,54 @@ class DownloaderTests(unittest.TestCase):
     def test_worker_count_is_validated(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least 1"):
             DownloaderConfig(Path("output"), workers=0)
+
+    def test_album_cid_selects_only_the_matching_album(self) -> None:
+        downloader = object.__new__(Downloader)
+        downloader.config = DownloaderConfig(Path("output"), album_cid="a2")
+        albums = [{"cid": "a1", "name": "First"}, {"cid": "a2", "name": "Second"}]
+
+        self.assertEqual(downloader._filter_albums(albums), [albums[1]])
+
+    def test_song_cid_lookup_returns_its_album(self) -> None:
+        class CatalogAPI:
+            def get_album_detail(self, cid: str) -> dict[str, object]:
+                songs = {"a1": [{"cid": "s1"}], "a2": [{"cid": "s2"}]}
+                return {"songs": songs[cid]}
+
+        albums = [{"cid": "a1", "name": "First"}, {"cid": "a2", "name": "Second"}]
+
+        self.assertEqual(
+            Downloader._find_song_album(CatalogAPI(), albums, "s2"), albums[1]
+        )
+
+    def test_song_cid_run_downloads_only_the_target_song(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [
+                    {"cid": "a1", "name": "First"},
+                    {"cid": "a2", "name": "Second"},
+                ]
+
+            def get_album_detail(self, cid: str) -> dict[str, object]:
+                songs = {"a1": [{"cid": "s1"}], "a2": [{"cid": "s2"}]}
+                return {"songs": songs[cid]}
+
+        downloader = object.__new__(Downloader)
+        downloader.config = DownloaderConfig(Path("output"), song_cid="s2")
+        downloader._download_album = Mock()
+
+        with patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI):
+            self.assertEqual(downloader.run(), 0)
+
+        downloader._download_album.assert_called_once_with(
+            {"cid": "a2", "name": "Second"}, "s2"
+        )
 
 
 if __name__ == "__main__":

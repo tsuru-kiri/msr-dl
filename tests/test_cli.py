@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+import io
+import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
+
+import main
+
+
+class FakeAPI:
+    def __init__(self) -> None:
+        self.album_requests: list[str] = []
+
+    def __enter__(self) -> FakeAPI:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        pass
+
+    def get_albums(self) -> list[dict[str, object]]:
+        return [{"cid": "a1", "name": "앨범", "artistes": ["Artist"]}]
+
+    def get_album_detail(self, cid: str) -> dict[str, object]:
+        self.album_requests.append(cid)
+        return {
+            "songs": [
+                {"cid": "s1", "name": "노래", "artistes": ["Singer"]},
+            ]
+        }
+
+
+class CLITests(unittest.TestCase):
+    def test_legacy_arguments_default_to_download(self) -> None:
+        args = main.parse_args(["--album", "Ambience"])
+
+        self.assertEqual(args.command, "download")
+        self.assertEqual(args.album, ["Ambience"])
+
+    def test_version_prints_without_selecting_a_command(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+            main.parse_args(["--version"])
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(output.getvalue(), f"msr-dl {main.VERSION}\n")
+
+    def test_download_cid_targets_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(SystemExit):
+            main.parse_args(["download", "--album-cid", "a1", "--song-cid", "s1"])
+
+    def test_list_albums_prints_catalog_without_downloader(self) -> None:
+        output = io.StringIO()
+        with patch("main.MonsterSirenAPI", FakeAPI), redirect_stdout(output):
+            result = main.list_catalog(None)
+
+        self.assertEqual(result, 0)
+        lines = output.getvalue().splitlines()
+        self.assertEqual(lines[0], "CID | ALBUM NAME | ARTISTS")
+        self.assertEqual(lines[1], "----+------------+--------")
+        self.assertEqual(lines[2].split("|")[0].strip(), "a1")
+
+    def test_list_album_songs_prints_tracks(self) -> None:
+        output = io.StringIO()
+        with patch("main.MonsterSirenAPI", FakeAPI), redirect_stdout(output):
+            result = main.list_catalog("a1")
+
+        self.assertEqual(result, 0)
+        lines = output.getvalue().splitlines()
+        self.assertEqual(lines[0], "TRACK | CID | SONG NAME | ARTISTS")
+        self.assertEqual(lines[1], "------+-----+-----------+--------")
+        self.assertEqual(lines[2].split("|")[2].strip(), "노래")
+
+    def test_table_cells_align_by_terminal_display_width(self) -> None:
+        table = main._format_table(
+            ("NAME", "ARTIST"), [("ASCII", "가수"), ("한글", "Singer")]
+        )
+
+        lines = table.splitlines()
+        widths = [
+            [main._display_width(cell) for cell in line.split("|")]
+            for line in (lines[0], lines[2], lines[3])
+        ]
+        self.assertEqual(widths[0], widths[1])
+        self.assertEqual(widths[0], widths[2])

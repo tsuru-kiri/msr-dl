@@ -42,6 +42,23 @@ python main.py
 msr-dl
 ```
 
+List albums or an album's songs without downloading:
+
+```bash
+msr-dl list
+msr-dl list --album-cid 0239
+```
+
+Download a specific album or song by CID:
+
+```bash
+msr-dl download --album-cid 0239
+msr-dl download --song-cid <song-cid>
+```
+
+`msr-dl download` and the legacy `msr-dl` command both download the full
+catalog by default.
+
 Common options:
 
 ```bash

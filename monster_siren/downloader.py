@@ -24,12 +24,21 @@ class DownloaderConfig:
     output_dir: Path
     workers: int = 4
     album_filters: tuple[str, ...] = ()
+    album_cid: str | None = None
+    song_cid: str | None = None
     force: bool = False
     download_lyrics: bool = True
 
     def __post_init__(self) -> None:
         if self.workers < 1:
             raise ValueError("workers must be at least 1")
+        if self.album_cid is not None and not self.album_cid:
+            raise ValueError("album CID must not be empty")
+        if self.song_cid is not None and not self.song_cid:
+            raise ValueError("song CID must not be empty")
+        targets = (self.album_filters, self.album_cid, self.song_cid)
+        if sum(bool(value) for value in targets) > 1:
+            raise ValueError("album filters and CID targets cannot be combined")
 
 
 class Downloader:
@@ -43,13 +52,20 @@ class Downloader:
     def run(self) -> int:
         with MonsterSirenAPI() as api:
             albums = api.get_albums()
+            if self.config.song_cid is not None:
+                album = self._find_song_album(api, albums, self.config.song_cid)
+                targets = [(album, self.config.song_cid)]
+            else:
+                targets = [(album, None) for album in self._filter_albums(albums)]
 
-        albums = self._filter_albums(albums)
-        logging.info("Selected %d album(s).", len(albums))
+        logging.info("Selected %d album(s).", len(targets))
 
         failures = 0
         with ThreadPoolExecutor(max_workers=self.config.workers) as pool:
-            futures = [pool.submit(self._download_album, album) for album in albums]
+            futures = [
+                pool.submit(self._download_album, album, song_cid)
+                for album, song_cid in targets
+            ]
             for future in as_completed(futures):
                 try:
                     future.result()
@@ -60,6 +76,13 @@ class Downloader:
         return failures
 
     def _filter_albums(self, albums: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if self.config.album_cid is not None:
+            matches = [
+                album for album in albums if album["cid"] == self.config.album_cid
+            ]
+            if not matches:
+                raise ValueError(f"Album CID not found: {self.config.album_cid}")
+            return matches
         if not self.config.album_filters:
             return albums
 
@@ -70,13 +93,31 @@ class Downloader:
             if any(needle in album.get("name", "").casefold() for needle in needles)
         ]
 
-    def _download_album(self, album: dict[str, Any]) -> None:
+    @staticmethod
+    def _find_song_album(
+        api: MonsterSirenAPI, albums: list[dict[str, Any]], song_cid: str
+    ) -> dict[str, Any]:
+        match: dict[str, Any] | None = None
+        for album in albums:
+            songs = api.get_album_detail(album["cid"])["songs"]
+            if any(song["cid"] == song_cid for song in songs):
+                if match is not None:
+                    raise ValueError(f"Song CID appears in multiple albums: {song_cid}")
+                match = album
+        if match is None:
+            raise ValueError(f"Song CID not found: {song_cid}")
+        return match
+
+    def _download_album(
+        self, album: dict[str, Any], song_cid: str | None = None
+    ) -> None:
         album_cid = album["cid"]
         album_name = album["name"]
         album_artists = self._string_list(album.get("artistes"))
         album_dir = self.output_dir / album_directory_name(album_name, album_cid)
         album_dir.mkdir(parents=True, exist_ok=True)
-        self.state.mark_album_started(album_cid, album_name)
+        if song_cid is None:
+            self.state.mark_album_started(album_cid, album_name)
 
         logging.info("Album: %s", album_name)
 
@@ -99,6 +140,8 @@ class Downloader:
 
                 album_failed = False
                 for track_number, song in enumerate(songs, start=1):
+                    if song_cid is not None and song["cid"] != song_cid:
+                        continue
                     try:
                         self._download_song(
                             api=api,
@@ -128,7 +171,8 @@ class Downloader:
                 if album_failed:
                     raise RuntimeError(f"One or more songs failed in {album_name}")
 
-                self.state.mark_album_complete(album_cid, album_name)
+                if song_cid is None:
+                    self.state.mark_album_complete(album_cid, album_name)
                 logging.info("Completed album: %s", album_name)
         except Exception as exc:
             self.state.mark_album_failed(
