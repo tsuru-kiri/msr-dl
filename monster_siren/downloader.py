@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .api import MonsterSirenAPI
-from .audio import convert_wav_to_flac, write_metadata
+from .api import MAX_COVER_BYTES, MAX_LYRIC_BYTES, MonsterSirenAPI
+from .audio import (
+    convert_wav_to_flac,
+    detect_audio_type,
+    ensure_ffmpeg,
+    validate_audio,
+    write_metadata,
+)
 from .state import DownloadState
-from .utils import safe_filename, save_cover_as_png
+from .utils import album_directory_name, is_valid_cover, save_cover_as_png, song_stem
 
 
 @dataclass(frozen=True)
@@ -20,12 +27,17 @@ class DownloaderConfig:
     force: bool = False
     download_lyrics: bool = True
 
+    def __post_init__(self) -> None:
+        if self.workers < 1:
+            raise ValueError("workers must be at least 1")
+
 
 class Downloader:
     def __init__(self, config: DownloaderConfig) -> None:
         self.config = config
         self.output_dir = config.output_dir.expanduser().resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_ffmpeg()
         self.state = DownloadState(self.output_dir / "download_state.json")
 
     def run(self) -> int:
@@ -61,54 +73,68 @@ class Downloader:
     def _download_album(self, album: dict[str, Any]) -> None:
         album_cid = album["cid"]
         album_name = album["name"]
-        album_artists = album.get("artistes") or []
-        album_dir = self.output_dir / safe_filename(album_name)
+        album_artists = self._string_list(album.get("artistes"))
+        album_dir = self.output_dir / album_directory_name(album_name, album_cid)
         album_dir.mkdir(parents=True, exist_ok=True)
+        self.state.mark_album_started(album_cid, album_name)
 
         logging.info("Album: %s", album_name)
 
-        # One Session per worker thread: no cross-thread Session sharing.
-        with MonsterSirenAPI() as api:
-            cover_path = album_dir / "cover.png"
-            if self.config.force or not cover_path.exists():
-                cover_bytes = api.download_bytes(album["coverUrl"])
-                save_cover_as_png(cover_bytes, cover_path)
-
-            detail = api.get_album_detail(album_cid)
-            songs = detail.get("songs") or []
-
-            album_failed = False
-            for track_number, song in enumerate(songs, start=1):
-                try:
-                    self._download_song(
-                        api=api,
-                        album_cid=album_cid,
-                        album_name=album_name,
-                        album_artists=album_artists,
-                        album_dir=album_dir,
-                        cover_path=cover_path,
-                        song=song,
-                        track_number=track_number,
+        try:
+            # A session belongs to one album task and is never shared across threads.
+            with MonsterSirenAPI() as api:
+                cover_path = album_dir / "cover.png"
+                if self.config.force or not is_valid_cover(cover_path):
+                    cover_url = album.get("coverUrl")
+                    if not isinstance(cover_url, str):
+                        raise ValueError(f"Album {album_cid} has no cover URL")
+                    cover_bytes = api.download_bytes(
+                        cover_url, max_bytes=MAX_COVER_BYTES
                     )
-                except Exception as exc:
-                    album_failed = True
-                    song_cid = song.get("cid", "unknown")
-                    song_name = song.get("name", "unknown")
-                    self.state.mark_song(
-                        album_cid,
-                        album_name,
-                        song_cid,
-                        song_name,
-                        "failed",
-                        error=f"{type(exc).__name__}: {exc}",
-                    )
-                    logging.exception("Failed: %s / %s", album_name, song_name)
+                    save_cover_as_png(cover_bytes, cover_path)
 
-            if album_failed:
-                raise RuntimeError(f"One or more songs failed in {album_name}")
+                detail = api.get_album_detail(album_cid)
+                songs = detail["songs"]
+                track_width = max(2, len(str(len(songs))))
 
-            self.state.mark_album_complete(album_cid, album_name)
-            logging.info("Completed album: %s", album_name)
+                album_failed = False
+                for track_number, song in enumerate(songs, start=1):
+                    try:
+                        self._download_song(
+                            api=api,
+                            album_cid=album_cid,
+                            album_name=album_name,
+                            album_artists=album_artists,
+                            album_dir=album_dir,
+                            cover_path=cover_path,
+                            song=song,
+                            track_number=track_number,
+                            track_width=track_width,
+                        )
+                    except Exception as exc:
+                        album_failed = True
+                        song_cid = str(song.get("cid", "unknown"))
+                        song_name = str(song.get("name", "unknown"))
+                        self.state.mark_song(
+                            album_cid,
+                            album_name,
+                            song_cid,
+                            song_name,
+                            "failed",
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
+                        logging.exception("Failed: %s / %s", album_name, song_name)
+
+                if album_failed:
+                    raise RuntimeError(f"One or more songs failed in {album_name}")
+
+                self.state.mark_album_complete(album_cid, album_name)
+                logging.info("Completed album: %s", album_name)
+        except Exception as exc:
+            self.state.mark_album_failed(
+                album_cid, album_name, f"{type(exc).__name__}: {exc}"
+            )
+            raise
 
     def _download_song(
         self,
@@ -121,62 +147,89 @@ class Downloader:
         cover_path: Path,
         song: dict[str, Any],
         track_number: int,
+        track_width: int,
     ) -> None:
         song_cid = song["cid"]
         song_name = song["name"]
 
-        if not self.config.force and self.state.is_song_complete(album_cid, song_cid):
+        stem = song_stem(song_name, song_cid, track_number, track_width)
+        expected_stem = album_dir / stem
+        if not self.config.force and self.state.is_song_complete(
+            album_cid,
+            song_cid,
+            expected_stem=expected_stem,
+            require_lyrics=self.config.download_lyrics,
+        ):
             logging.info("Skip completed: %s / %s", album_name, song_name)
             return
+
+        self.state.mark_song(
+            album_cid,
+            album_name,
+            song_cid,
+            song_name,
+            "in_progress",
+        )
 
         detail = api.get_song_detail(song_cid)
         source_url = detail["sourceUrl"]
         lyric_url = detail.get("lyricUrl")
 
-        stem = safe_filename(song_name)
-        lyric_path: Path | None = None
+        if lyric_url is not None and not isinstance(lyric_url, str):
+            raise ValueError(f"Song {song_cid} has an invalid lyric URL")
 
-        if self.config.download_lyrics and lyric_url:
-            lyric_path = album_dir / f"{stem}.lrc"
-            lyric_data = api.download_bytes(lyric_url)
-            lyric_path.write_bytes(lyric_data)
+        final_lyric_path: Path | None = None
+        with tempfile.TemporaryDirectory(
+            prefix=".song-", dir=album_dir
+        ) as work_dir_name:
+            work_dir = Path(work_dir_name)
+            staged_lyric: Path | None = None
+            if self.config.download_lyrics and lyric_url:
+                lyric_data = api.download_bytes(lyric_url, max_bytes=MAX_LYRIC_BYTES)
+                lyric_data.decode("utf-8")
+                staged_lyric = work_dir / "lyrics.lrc"
+                staged_lyric.write_bytes(lyric_data)
 
-        # Download to a neutral temporary extension first; content-type decides final type.
-        raw_path = album_dir / f"{stem}.download"
-        content_type = api.stream_to_file(source_url, raw_path)
+            raw_path = work_dir / "audio.download"
+            content_type = api.stream_to_file(source_url, raw_path)
+            audio_type = detect_audio_type(raw_path)
+            logging.debug(
+                "Detected %s for %s (Content-Type: %s)",
+                audio_type,
+                song_name,
+                content_type or "missing",
+            )
 
-        if content_type == "audio/mpeg":
-            audio_path = raw_path.with_suffix(".mp3")
-            raw_path.replace(audio_path)
-        elif content_type in {
-            "audio/wav",
-            "audio/x-wav",
-            "audio/wave",
-            "audio/vnd.wave",
-            "application/octet-stream",
-            "",
-        }:
-            wav_path = raw_path.with_suffix(".wav")
-            raw_path.replace(wav_path)
-            audio_path = convert_wav_to_flac(wav_path)
-        else:
-            raw_path.unlink(missing_ok=True)
-            raise ValueError(f"Unsupported Content-Type: {content_type!r}")
+            if audio_type == "wav":
+                wav_path = work_dir / "audio.wav"
+                raw_path.replace(wav_path)
+                staged_audio = convert_wav_to_flac(wav_path)
+            else:
+                staged_audio = work_dir / f"audio.{audio_type}"
+                raw_path.replace(staged_audio)
 
-        try:
             write_metadata(
-                audio_path,
+                staged_audio,
                 album=album_name,
                 title=song_name,
                 album_artists=album_artists,
-                artists=song.get("artistes") or [],
+                artists=self._string_list(song.get("artistes")),
                 track_number=track_number,
                 cover_path=cover_path,
-                lyric_path=lyric_path,
+                lyric_path=staged_lyric,
             )
-        except Exception:
-            # A file without correct metadata is not considered complete.
-            raise
+            validate_audio(staged_audio)
+
+            audio_path = Path(f"{expected_stem}{staged_audio.suffix}")
+            if staged_lyric is not None:
+                final_lyric_path = Path(f"{expected_stem}.lrc")
+                staged_lyric.replace(final_lyric_path)
+            staged_audio.replace(audio_path)
+
+        obsolete_suffix = ".flac" if audio_path.suffix == ".mp3" else ".mp3"
+        Path(f"{expected_stem}{obsolete_suffix}").unlink(missing_ok=True)
+        if not self.config.download_lyrics:
+            Path(f"{expected_stem}.lrc").unlink(missing_ok=True)
 
         self.state.mark_song(
             album_cid,
@@ -184,5 +237,14 @@ class Downloader:
             song_cid,
             song_name,
             "complete",
+            output_path=audio_path,
+            lyric_path=final_lyric_path,
+            lyrics_complete=self.config.download_lyrics,
         )
         logging.info("Completed: %s / %s", album_name, song_name)
+
+    @staticmethod
+    def _string_list(value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, str) and item]

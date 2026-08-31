@@ -1,5 +1,5 @@
-requests
-mutagen
-pydub
-pylrc
-Pillow
+requests>=2.32,<3
+urllib3>=2,<3
+mutagen>=1.47,<2
+pylrc>=0.1.2,<0.2
+Pillow>=11,<13

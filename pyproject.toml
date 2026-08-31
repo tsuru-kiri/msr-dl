@@ -1,7 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "msr-dl"
+name = "monster-siren-downloader"
 version = "0.1.0"
-description = "Add your description here"
+description = "Download Monster Siren albums with metadata and synchronized lyrics"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "requests>=2.32,<3",
+    "urllib3>=2,<3",
+    "mutagen>=1.47,<2",
+    "pylrc>=0.1.2,<0.2",
+    "Pillow>=11,<13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "ruff>=0.12,<1",
+]
+
+[project.scripts]
+msr-dl = "main:main"
+
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+include = ["monster_siren*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

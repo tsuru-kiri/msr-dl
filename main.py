@@ -62,8 +62,15 @@ def main() -> int:
         download_lyrics=not args.no_lyrics,
     )
 
-    downloader = Downloader(config)
-    failures = downloader.run()
+    try:
+        downloader = Downloader(config)
+        failures = downloader.run()
+    except KeyboardInterrupt:
+        logging.warning("Interrupted by user.")
+        return 130
+    except Exception:
+        logging.exception("Downloader failed before all albums could be processed.")
+        return 1
 
     if failures:
         logging.error("%d album(s) finished with errors.", failures)
