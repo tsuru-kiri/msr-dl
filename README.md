@@ -70,6 +70,37 @@ python main.py --no-lyrics
 python main.py --verbose
 ```
 
+Use an updated PRTS metadata snapshot while downloading:
+
+```bash
+msr-dl download --metadata-snapshot /config/prts-metadata.json
+```
+
+## PRTS metadata
+
+Monster Siren does not expose album release dates and occasionally omits artist
+credits. Generate a snapshot from the PRTS Wiki music overview table:
+
+```bash
+msr-dl metadata update \
+  --snapshot /config/prts-metadata.json \
+  --aliases /config/prts-aliases.json
+```
+
+Use `--check` to report changes without writing the snapshot. The updater makes
+one Monster Siren album-list request and one PRTS music-overview request. It
+does not visit individual album pages or search for unmatched titles.
+
+Album names are matched exactly and case-sensitively. Name differences are
+maintained by CID in the aliases JSON. Existing unmatched records are retained
+when a snapshot is updated, while new unmatched albums are reported and
+omitted.
+
+PRTS artists are normalized to include `塞壬唱片-MSR` first. They are used only
+when Monster Siren's album or song artist data is empty. PRTS release dates
+replace source dates. Without a PRTS date, valid MP3/FLAC dates are preserved,
+but WAV production metadata is discarded during FLAC conversion.
+
 ## Output and state
 
 ```text

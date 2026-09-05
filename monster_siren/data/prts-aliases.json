@@ -1,0 +1,81 @@
+{
+  "albums": {
+    "0248": {
+      "msrName": "2022明日方舟音律联觉-灯下定影原声EP",
+      "prtsTitle": "音律联觉-灯下定影原声EP",
+      "reason": "PRTS title omits the year prefix"
+    },
+    "8926": {
+      "msrName": "A Toda Vela",
+      "prtsTitle": "出苍白海OST",
+      "reason": "PRTS uses the event OST title"
+    },
+    "8928": {
+      "msrName": " 直到大地变成一颗酸橙OST",
+      "prtsTitle": "直到大地变成一颗酸橙OST",
+      "reason": "Typo"
+    },
+    "1015": {
+      "msrName": "涤墨作战OST",
+      "prtsTitle": "危机合约涤墨作战OST"
+    },
+    "7764": {
+      "msrName": "卫戍协议盟约OST",
+      "prtsTitle": "卫戍协议：盟约OST"
+    },
+    "5192": {
+      "msrName": "焰烬曙明OST",
+      "prtsTitle": "明日方舟：焰烬曙明OST"
+    },
+    "1019": {
+      "msrName": "in your blue eyes",
+      "prtsTitle": "碧い瞳の中に"
+    },
+    "8925": {
+      "msrName": "Skeletal Wings ",
+      "prtsTitle": "Skeletal Wings"
+    },
+    "1012": {
+      "msrName": " Epilogue",
+      "prtsTitle": "Epilogue"
+    },
+    "4516": {
+      "msrName": "冬隐归路OST",
+      "prtsTitle": "明日方舟：冬隐归路OST"
+    },
+    "9386": {
+      "msrName": "Best Moments of... ",
+      "prtsTitle": "Best Moments of..."
+    },
+    "9388": {
+      "msrName": "The cure ",
+      "prtsTitle": "The cure"
+    },
+    "8937": {
+      "msrName": "Dormant Craving ",
+      "prtsTitle": "Dormant Craving"
+    },
+    "7776": {
+      "msrName": "Morning Dew ",
+      "prtsTitle": "Morning Dew"
+    },
+    "4511": {
+      "msrName": "冉冉升起，直播新星",
+      "prtsTitle": "最后的全能系美少女！",
+      "reason": "The original title in PRTS is 最后的全能系美少女！主播U的每日泰拉分享 (真没跑路), but because of line break (<br>) current program only detects prtsTitle above"
+    },
+    "7778": {
+      "msrName": "8-bit弹雨与断罪之拳",
+      "prtsTitle": "狂弹要塞！罗德大兵集结"
+    },
+    "2464": {
+      "msrName": "Operation Pine Soot",
+      "prtsTitle": "危机合约松烟行动OST"
+    },
+    "4524": {
+      "msrName": "危机合约黄铁·利刃·燃灰OST",
+      "prtsTitle": "危机合约 黄铁·利刃·燃灰OST"
+    }
+  },
+  "version": 1
+}

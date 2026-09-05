@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from monster_siren.downloader import Downloader, DownloaderConfig
+from monster_siren.metadata import AlbumMetadata
 from monster_siren.utils import album_directory_name, song_stem
 
 
@@ -112,6 +114,131 @@ class DownloaderTests(unittest.TestCase):
     def test_worker_count_is_validated(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least 1"):
             DownloaderConfig(Path("output"), workers=0)
+
+    def test_album_artists_only_use_prts_when_msr_is_empty(self) -> None:
+        prts = AlbumMetadata("2023-11-25", ("塞壬唱片-MSR", "kiyo"))
+
+        self.assertEqual(
+            Downloader._resolve_album_artists(["塞壬唱片-MSR"], prts),
+            ["塞壬唱片-MSR"],
+        )
+        self.assertEqual(
+            Downloader._resolve_album_artists([], prts),
+            ["塞壬唱片-MSR", "kiyo"],
+        )
+
+    def test_song_artist_priority_ends_with_prts_album_fallback(self) -> None:
+        fallback = ["塞壬唱片-MSR", "kiyo"]
+
+        self.assertEqual(
+            Downloader._resolve_song_artists(["Summary"], ["Detail"], fallback),
+            ["Summary"],
+        )
+        self.assertEqual(
+            Downloader._resolve_song_artists([], ["Detail"], fallback), ["Detail"]
+        )
+        self.assertEqual(Downloader._resolve_song_artists([], [], fallback), fallback)
+
+    def test_album_download_passes_snapshot_metadata_to_song(self) -> None:
+        class AlbumAPI:
+            def __enter__(self) -> AlbumAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_album_detail(self, cid: str) -> dict[str, object]:
+                return {"songs": [{"cid": "s1", "name": "Song", "artistes": []}]}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = root / "metadata.json"
+            snapshot.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "generatedAt": "now",
+                        "albums": {
+                            "a1": {
+                                "msrName": "Album",
+                                "prtsTitle": "Album",
+                                "releaseDate": "2023-11-25",
+                                "artists": ["塞壬唱片-MSR", "kiyo"],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            downloader = Downloader(
+                DownloaderConfig(root / "output", workers=1, metadata_snapshot=snapshot)
+            )
+            downloader._download_song = Mock()
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", AlbumAPI),
+                patch("monster_siren.downloader.is_valid_cover", return_value=True),
+            ):
+                downloader._download_album(
+                    {"cid": "a1", "name": "Album", "artistes": []}
+                )
+
+            kwargs = downloader._download_song.call_args.kwargs
+            self.assertEqual(kwargs["album_artists"], ["塞壬唱片-MSR", "kiyo"])
+            self.assertEqual(kwargs["song_artist_fallback"], ["塞壬唱片-MSR", "kiyo"])
+            self.assertEqual(kwargs["release_date"], "2023-11-25")
+
+    def test_prts_song_fallback_is_kept_when_msr_album_artist_exists(self) -> None:
+        class AlbumAPI:
+            def __enter__(self) -> AlbumAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_album_detail(self, cid: str) -> dict[str, object]:
+                return {"songs": [{"cid": "s1", "name": "Song", "artistes": []}]}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = root / "metadata.json"
+            snapshot.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "generatedAt": "now",
+                        "albums": {
+                            "0242": {
+                                "msrName": "Album",
+                                "prtsTitle": "Album",
+                                "releaseDate": "2023-11-25",
+                                "artists": ["塞壬唱片-MSR", "kiyo"],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            downloader = Downloader(
+                DownloaderConfig(root / "output", metadata_snapshot=snapshot)
+            )
+            downloader._download_song = Mock()
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", AlbumAPI),
+                patch("monster_siren.downloader.is_valid_cover", return_value=True),
+            ):
+                downloader._download_album(
+                    {
+                        "cid": "0242",
+                        "name": "Album",
+                        "artistes": ["塞壬唱片-MSR"],
+                    }
+                )
+
+            kwargs = downloader._download_song.call_args.kwargs
+            self.assertEqual(kwargs["album_artists"], ["塞壬唱片-MSR"])
+            self.assertEqual(kwargs["song_artist_fallback"], ["塞壬唱片-MSR", "kiyo"])
 
     def test_album_cid_selects_only_the_matching_album(self) -> None:
         downloader = object.__new__(Downloader)

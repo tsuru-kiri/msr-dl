@@ -3,7 +3,8 @@ from __future__ import annotations
 import io
 import unittest
 from contextlib import redirect_stdout
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 import main
 
@@ -48,6 +49,54 @@ class CLITests(unittest.TestCase):
     def test_download_cid_targets_are_mutually_exclusive(self) -> None:
         with self.assertRaises(SystemExit):
             main.parse_args(["download", "--album-cid", "a1", "--song-cid", "s1"])
+
+    def test_metadata_update_accepts_configurable_paths_and_check_mode(self) -> None:
+        args = main.parse_args(
+            [
+                "metadata",
+                "update",
+                "--snapshot",
+                "/tmp/custom.json",
+                "--aliases",
+                "/tmp/aliases.json",
+                "--check",
+            ]
+        )
+
+        self.assertEqual(args.command, "metadata")
+        self.assertEqual(args.metadata_command, "update")
+        self.assertEqual(args.snapshot, Path("/tmp/custom.json"))
+        self.assertEqual(args.aliases, Path("/tmp/aliases.json"))
+        self.assertTrue(args.check)
+
+    def test_download_accepts_metadata_snapshot(self) -> None:
+        args = main.parse_args(["download", "--metadata-snapshot", "/tmp/custom.json"])
+
+        self.assertEqual(args.metadata_snapshot, Path("/tmp/custom.json"))
+
+    def test_metadata_update_command_runs_without_downloader(self) -> None:
+        report = Mock()
+        report.albums = 1
+        report.unmatched = []
+        report.publish.added = 1
+        report.publish.updated = 0
+        report.publish.unchanged = 0
+        report.publish.retained_unmatched = 0
+        report.publish.new_unmatched = 0
+
+        with (
+            patch(
+                "sys.argv",
+                ["msr-dl", "metadata", "update", "--snapshot", "/tmp/meta.json"],
+            ),
+            patch("main.update_metadata_snapshot", return_value=report) as update,
+        ):
+            result = main.main()
+
+        self.assertEqual(result, 0)
+        update.assert_called_once_with(
+            Path("/tmp/meta.json"), main.DEFAULT_ALIASES_PATH, check=False
+        )
 
     def test_list_albums_prints_catalog_without_downloader(self) -> None:
         output = io.StringIO()

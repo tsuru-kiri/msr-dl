@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
+from datetime import date
 from pathlib import Path
 from shutil import which
+from typing import Any
 
 import pylrc
 from mutagen import File as MutagenFile
@@ -15,6 +18,7 @@ from mutagen.wave import WAVE
 from PIL import Image
 
 FFMPEG_TIMEOUT = 10 * 60
+_SOURCE_DATE = re.compile(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$")
 
 
 def ensure_ffmpeg() -> None:
@@ -44,6 +48,8 @@ def convert_wav_to_flac(wav_path: Path) -> Path:
                 "-y",
                 "-i",
                 str(wav_path),
+                "-map_metadata",
+                "-1",
                 str(partial),
             ],
             check=True,
@@ -104,6 +110,26 @@ def _artist_text(values: list[str]) -> str:
     return ", ".join(value for value in values if value)
 
 
+def _valid_source_date(value: str) -> bool:
+    match = _SOURCE_DATE.fullmatch(value)
+    if match is None:
+        return False
+    year, month, day = match.groups()
+    try:
+        date(int(year), int(month or "1"), int(day or "1"))
+    except ValueError:
+        return False
+    return True
+
+
+def _set_date(tags: Any, release_date: str | None) -> None:
+    values = tags.get("date", [])
+    if release_date is not None:
+        tags["date"] = release_date
+    elif values and not all(_valid_source_date(value) for value in values):
+        del tags["date"]
+
+
 def write_metadata(
     audio_path: Path,
     *,
@@ -114,6 +140,7 @@ def write_metadata(
     track_number: int,
     cover_path: Path,
     lyric_path: Path | None,
+    release_date: str | None = None,
 ) -> None:
     suffix = audio_path.suffix.lower()
 
@@ -127,6 +154,7 @@ def write_metadata(
         tags["albumartist"] = _artist_text(album_artists)
         tags["artist"] = _artist_text(artists)
         tags["tracknumber"] = str(track_number)
+        _set_date(tags, release_date)
         tags.save(audio_path)
 
         id3 = ID3(audio_path)
@@ -166,6 +194,7 @@ def write_metadata(
     flac["albumartist"] = _artist_text(album_artists)
     flac["artist"] = _artist_text(artists)
     flac["tracknumber"] = str(track_number)
+    _set_date(flac, release_date)
 
     flac.clear_pictures()
     picture = Picture()

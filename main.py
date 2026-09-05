@@ -10,6 +10,8 @@ from unicodedata import combining, east_asian_width
 from monster_siren import __version__
 from monster_siren.api import MonsterSirenAPI
 from monster_siren.downloader import Downloader, DownloaderConfig
+from monster_siren.metadata import DEFAULT_ALIASES_PATH
+from monster_siren.prts import update_metadata_snapshot
 
 try:
     VERSION = version("msr-dl")
@@ -62,15 +64,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Enable debug logging.",
     )
+    download.add_argument(
+        "--metadata-snapshot",
+        type=Path,
+        help="Use this PRTS metadata snapshot instead of the bundled snapshot.",
+    )
 
     listing = subparsers.add_parser("list", help="List albums or an album's songs.")
     listing.add_argument("--album-cid", help="List songs in the album with this CID.")
     listing.add_argument("--verbose", action="store_true", help="Enable debug logging.")
 
+    metadata = subparsers.add_parser("metadata", help="Manage PRTS metadata.")
+    metadata_commands = metadata.add_subparsers(dest="metadata_command", required=True)
+    update = metadata_commands.add_parser("update", help="Update a PRTS snapshot.")
+    update.add_argument("--snapshot", type=Path, required=True)
+    update.add_argument("--aliases", type=Path, default=DEFAULT_ALIASES_PATH)
+    update.add_argument("--check", action="store_true")
+    update.add_argument("--verbose", action="store_true", help="Enable debug logging.")
+
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments or arguments[0] not in {
         "download",
         "list",
+        "metadata",
         "-h",
         "--help",
         "--version",
@@ -147,6 +163,29 @@ def main() -> int:
             logging.exception("Could not retrieve catalog information.")
             return 1
 
+    if args.command == "metadata":
+        try:
+            report = update_metadata_snapshot(
+                args.snapshot, args.aliases, check=args.check
+            )
+        except Exception:
+            logging.exception("Could not update the PRTS metadata snapshot.")
+            return 1
+        for cid, name in report.unmatched:
+            logging.warning("Unmatched album: %s | %s", cid, name)
+        result = report.publish
+        logging.info(
+            "Albums: %d | Added: %d | Updated: %d | Unchanged: %d | "
+            "Retained unmatched: %d | New unmatched: %d",
+            report.albums,
+            result.added,
+            result.updated,
+            result.unchanged,
+            result.retained_unmatched,
+            result.new_unmatched,
+        )
+        return 0
+
     config = DownloaderConfig(
         output_dir=args.output,
         workers=max(1, args.workers),
@@ -155,6 +194,7 @@ def main() -> int:
         song_cid=args.song_cid,
         force=args.force,
         download_lyrics=not args.no_lyrics,
+        metadata_snapshot=args.metadata_snapshot,
     )
 
     try:

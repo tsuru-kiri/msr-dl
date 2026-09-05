@@ -31,6 +31,9 @@ py-modules = ["main"]
 [tool.setuptools.packages.find]
 include = ["monster_siren*"]
 
+[tool.setuptools.package-data]
+monster_siren = ["data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

@@ -15,6 +15,11 @@ from .audio import (
     validate_audio,
     write_metadata,
 )
+from .metadata import (
+    DEFAULT_SNAPSHOT_PATH,
+    AlbumMetadata,
+    MetadataSnapshot,
+)
 from .state import DownloadState
 from .utils import album_directory_name, is_valid_cover, save_cover_as_png, song_stem
 
@@ -28,6 +33,7 @@ class DownloaderConfig:
     song_cid: str | None = None
     force: bool = False
     download_lyrics: bool = True
+    metadata_snapshot: Path | None = None
 
     def __post_init__(self) -> None:
         if self.workers < 1:
@@ -48,6 +54,8 @@ class Downloader:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         ensure_ffmpeg()
         self.state = DownloadState(self.output_dir / "download_state.json")
+        snapshot_path = config.metadata_snapshot or DEFAULT_SNAPSHOT_PATH
+        self.metadata = MetadataSnapshot.from_path(snapshot_path)
 
     def run(self) -> int:
         with MonsterSirenAPI() as api:
@@ -113,7 +121,18 @@ class Downloader:
     ) -> None:
         album_cid = album["cid"]
         album_name = album["name"]
-        album_artists = self._string_list(album.get("artistes"))
+        album_metadata = self.metadata.album(album_cid)
+        album_artists = self._resolve_album_artists(
+            self._string_list(album.get("artistes")), album_metadata
+        )
+        song_artist_fallback = (
+            list(album_metadata.artists)
+            if album_metadata is not None
+            else album_artists
+        )
+        release_date = (
+            album_metadata.release_date if album_metadata is not None else None
+        )
         album_dir = self.output_dir / album_directory_name(album_name, album_cid)
         album_dir.mkdir(parents=True, exist_ok=True)
         if song_cid is None:
@@ -148,11 +167,13 @@ class Downloader:
                             album_cid=album_cid,
                             album_name=album_name,
                             album_artists=album_artists,
+                            song_artist_fallback=song_artist_fallback,
                             album_dir=album_dir,
                             cover_path=cover_path,
                             song=song,
                             track_number=track_number,
                             track_width=track_width,
+                            release_date=release_date,
                         )
                     except Exception as exc:
                         album_failed = True
@@ -192,6 +213,8 @@ class Downloader:
         song: dict[str, Any],
         track_number: int,
         track_width: int,
+        song_artist_fallback: list[str] | None = None,
+        release_date: str | None = None,
     ) -> None:
         song_cid = song["cid"]
         song_name = song["name"]
@@ -218,6 +241,11 @@ class Downloader:
         detail = api.get_song_detail(song_cid)
         source_url = detail["sourceUrl"]
         lyric_url = detail.get("lyricUrl")
+        artists = self._resolve_song_artists(
+            self._string_list(song.get("artistes")),
+            self._string_list(detail.get("artists")),
+            song_artist_fallback if song_artist_fallback is not None else album_artists,
+        )
 
         if lyric_url is not None and not isinstance(lyric_url, str):
             raise ValueError(f"Song {song_cid} has an invalid lyric URL")
@@ -257,10 +285,11 @@ class Downloader:
                 album=album_name,
                 title=song_name,
                 album_artists=album_artists,
-                artists=self._string_list(song.get("artistes")),
+                artists=artists,
                 track_number=track_number,
                 cover_path=cover_path,
                 lyric_path=staged_lyric,
+                release_date=release_date,
             )
             validate_audio(staged_audio)
 
@@ -292,3 +321,19 @@ class Downloader:
         if not isinstance(value, list):
             return []
         return [item for item in value if isinstance(item, str) and item]
+
+    @staticmethod
+    def _resolve_album_artists(
+        msr_artists: list[str], prts: AlbumMetadata | None
+    ) -> list[str]:
+        if msr_artists or prts is None:
+            return msr_artists
+        return list(prts.artists)
+
+    @staticmethod
+    def _resolve_song_artists(
+        summary_artists: list[str],
+        detail_artists: list[str],
+        album_artists: list[str],
+    ) -> list[str]:
+        return summary_artists or detail_artists or album_artists
