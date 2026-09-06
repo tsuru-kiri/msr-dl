@@ -74,6 +74,32 @@ class CLITests(unittest.TestCase):
 
         self.assertEqual(args.metadata_snapshot, Path("/tmp/custom.json"))
 
+    def test_download_command_logs_summary(self) -> None:
+        report = Mock(
+            albums=2,
+            songs=3,
+            downloaded=1,
+            skipped=1,
+            failed=1,
+            failed_albums=1,
+        )
+
+        with (
+            patch("sys.argv", ["msr-dl", "download"]),
+            patch("main.Downloader") as downloader,
+            self.assertLogs(level="INFO") as logs,
+        ):
+            downloader.return_value.run.return_value = report
+            result = main.main()
+
+        self.assertEqual(result, 1)
+        self.assertTrue(
+            any(
+                "Albums: 2 | Songs: 3 | Downloaded: 1 | Skipped: 1 | Failed: 1" in line
+                for line in logs.output
+            )
+        )
+
     def test_metadata_update_command_runs_without_downloader(self) -> None:
         report = Mock()
         report.albums = 1

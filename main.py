@@ -269,7 +269,7 @@ def main() -> int:
 
     try:
         downloader = Downloader(config)
-        failures = downloader.run()
+        report = downloader.run()
     except KeyboardInterrupt:
         logging.warning("Interrupted by user.")
         return 130
@@ -277,12 +277,15 @@ def main() -> int:
         logging.exception("Downloader failed before all albums could be processed.")
         return 1
 
-    if failures:
-        logging.error("%d album(s) finished with errors.", failures)
-        return 1
-
-    logging.info("All requested albums completed.")
-    return 0
+    logging.info(
+        "Albums: %d | Songs: %d | Downloaded: %d | Skipped: %d | Failed: %d",
+        report.albums,
+        report.songs,
+        report.downloaded,
+        report.skipped,
+        report.failed,
+    )
+    return 1 if report.failed or report.failed_albums else 0
 
 
 if __name__ == "__main__":

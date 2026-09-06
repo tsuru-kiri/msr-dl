@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from PIL import Image
 
-from monster_siren.downloader import Downloader, DownloaderConfig
+from monster_siren.downloader import Downloader, DownloaderConfig, DownloadReport
 from monster_siren.metadata import AlbumMetadata
 from monster_siren.utils import album_directory_name, song_stem
 
@@ -292,14 +292,90 @@ class DownloaderTests(unittest.TestCase):
 
         downloader = object.__new__(Downloader)
         downloader.config = DownloaderConfig(Path("output"), song_cid="s2")
-        downloader._download_album = Mock()
+        downloader._download_album = Mock(return_value=DownloadReport())
 
         with patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI):
-            self.assertEqual(downloader.run(), 0)
+            self.assertEqual(
+                downloader.run(),
+                DownloadReport(albums=1),
+            )
 
         downloader._download_album.assert_called_once_with(
             {"cid": "a2", "name": "Second"}, "s2"
         )
+
+    def test_run_aggregates_album_download_reports(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [
+                    {"cid": "a1", "name": "First"},
+                    {"cid": "a2", "name": "Second"},
+                ]
+
+        downloader = object.__new__(Downloader)
+        downloader.config = DownloaderConfig(Path("output"), workers=1)
+        downloader._download_album = Mock(
+            side_effect=[
+                DownloadReport(songs=2, downloaded=1, skipped=1),
+                DownloadReport(songs=1, failed=1, failed_albums=1),
+            ]
+        )
+
+        with patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI):
+            report = downloader.run()
+
+        self.assertEqual(
+            report,
+            DownloadReport(
+                albums=2,
+                songs=3,
+                downloaded=1,
+                skipped=1,
+                failed=1,
+                failed_albums=1,
+            ),
+        )
+
+    def test_album_report_counts_songs_after_an_earlier_song_fails(self) -> None:
+        class AlbumAPI:
+            def __enter__(self) -> AlbumAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_album_detail(self, cid: str) -> dict[str, object]:
+                return {
+                    "songs": [
+                        {"cid": "s1", "name": "First"},
+                        {"cid": "s2", "name": "Second"},
+                        {"cid": "s3", "name": "Third"},
+                    ]
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            downloader = Downloader(DownloaderConfig(Path(directory), workers=1))
+            downloader._download_song = Mock(
+                side_effect=[True, RuntimeError("download failed"), False]
+            )
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", AlbumAPI),
+                patch("monster_siren.downloader.is_valid_cover", return_value=True),
+            ):
+                report = downloader._download_album({"cid": "a1", "name": "Album"})
+
+        self.assertEqual(report.songs, 3)
+        self.assertEqual(report.downloaded, 1)
+        self.assertEqual(report.skipped, 1)
+        self.assertEqual(report.failed, 1)
+        self.assertEqual(report.failed_albums, 1)
 
 
 if __name__ == "__main__":

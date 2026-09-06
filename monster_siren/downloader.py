@@ -53,6 +53,23 @@ class DownloaderConfig:
             raise ValueError("album filters and CID targets cannot be combined")
 
 
+@dataclass
+class DownloadReport:
+    albums: int = 0
+    songs: int = 0
+    downloaded: int = 0
+    skipped: int = 0
+    failed: int = 0
+    failed_albums: int = 0
+
+    def add(self, other: DownloadReport) -> None:
+        self.songs += other.songs
+        self.downloaded += other.downloaded
+        self.skipped += other.skipped
+        self.failed += other.failed
+        self.failed_albums += other.failed_albums
+
+
 class Downloader:
     def __init__(self, config: DownloaderConfig) -> None:
         self.config = config
@@ -63,7 +80,7 @@ class Downloader:
         snapshot_path = config.metadata_snapshot or DEFAULT_SNAPSHOT_PATH
         self.metadata = MetadataSnapshot.from_path(snapshot_path)
 
-    def run(self) -> int:
+    def run(self) -> DownloadReport:
         with MonsterSirenAPI() as api:
             albums = api.get_albums()
             if self.config.song_cid is not None:
@@ -74,7 +91,7 @@ class Downloader:
 
         logging.info("Selected %d album(s).", len(targets))
 
-        failures = 0
+        report = DownloadReport(albums=len(targets))
         with ThreadPoolExecutor(max_workers=self.config.workers) as pool:
             futures = [
                 pool.submit(self._download_album, album, song_cid)
@@ -82,12 +99,12 @@ class Downloader:
             ]
             for future in as_completed(futures):
                 try:
-                    future.result()
+                    report.add(future.result())
                 except Exception:
-                    failures += 1
+                    report.failed_albums += 1
                     logging.exception("Album worker failed.")
 
-        return failures
+        return report
 
     def _filter_albums(self, albums: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if self.config.album_cid is not None:
@@ -124,7 +141,8 @@ class Downloader:
 
     def _download_album(
         self, album: dict[str, Any], song_cid: str | None = None
-    ) -> None:
+    ) -> DownloadReport:
+        report = DownloadReport()
         album_cid = album["cid"]
         album_name = normalize_album_name(album["name"])
         album_metadata = self.metadata.album(album_cid)
@@ -166,8 +184,9 @@ class Downloader:
                 for track_number, song in enumerate(songs, start=1):
                     if song_cid is not None and song["cid"] != song_cid:
                         continue
+                    report.songs += 1
                     try:
-                        self._download_song(
+                        downloaded = self._download_song(
                             api=api,
                             album_cid=album_cid,
                             album_name=album_name,
@@ -188,14 +207,19 @@ class Downloader:
                                 not msr_album_artists and album_metadata is not None
                             ),
                         )
+                        if downloaded:
+                            report.downloaded += 1
+                        else:
+                            report.skipped += 1
                     except Exception as exc:
                         album_failed = True
-                        song_cid = str(song.get("cid", "unknown"))
+                        report.failed += 1
+                        failed_song_cid = str(song.get("cid", "unknown"))
                         song_name = str(song.get("name", "unknown"))
                         self.state.mark_song(
                             album_cid,
                             album_name,
-                            song_cid,
+                            failed_song_cid,
                             song_name,
                             "failed",
                             error=f"{type(exc).__name__}: {exc}",
@@ -208,11 +232,14 @@ class Downloader:
                 if song_cid is None:
                     self.state.mark_album_complete(album_cid, album_name)
                 logging.info("Completed album: %s", album_name)
+                return report
         except Exception as exc:
+            report.failed_albums = 1
             self.state.mark_album_failed(
                 album_cid, album_name, f"{type(exc).__name__}: {exc}"
             )
-            raise
+            logging.exception("Album worker failed: %s", album_name)
+            return report
 
     def _download_song(
         self,
@@ -230,7 +257,7 @@ class Downloader:
         release_date: str | None = None,
         prts_fingerprint: str | None = None,
         prts_album_artists: bool = False,
-    ) -> None:
+    ) -> bool:
         song_cid = song["cid"]
         song_name = song["name"]
 
@@ -243,7 +270,7 @@ class Downloader:
             require_lyrics=self.config.download_lyrics,
         ):
             logging.info("Skip completed: %s / %s", album_name, song_name)
-            return
+            return False
 
         self.state.mark_song(
             album_cid,
@@ -339,6 +366,7 @@ class Downloader:
             ),
         )
         logging.info("Completed: %s / %s", album_name, song_name)
+        return True
 
     @staticmethod
     def _string_list(value: object) -> list[str]:
