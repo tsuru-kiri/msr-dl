@@ -379,6 +379,33 @@ class MetadataApplyTests(unittest.TestCase):
 
             self.assertEqual(report.prts_applied, 0)
             self.assertEqual(report.prts_unchanged, 0)
+            self.assertEqual(report.prts_unavailable, 1)
+
+    def test_all_reports_album_without_prts_metadata_as_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot_path, _ = self._fixture(root)
+            snapshot_path.write_text(
+                json.dumps({"version": 1, "albums": {}}), encoding="utf-8"
+            )
+
+            with (
+                patch("monster_siren.metadata_apply.ensure_ffmpeg"),
+                patch("monster_siren.metadata_apply.MonsterSirenAPI", FakeAPI),
+                patch("monster_siren.metadata_apply.validate_audio"),
+                patch("monster_siren.metadata_apply.write_metadata"),
+            ):
+                report = MetadataApplier(
+                    MetadataApplyConfig(
+                        root,
+                        metadata_snapshot=snapshot_path,
+                        apply_all=True,
+                    )
+                ).run()
+
+            self.assertEqual(report.msr_applied, 1)
+            self.assertEqual(report.prts_unchanged, 0)
+            self.assertEqual(report.prts_unavailable, 1)
 
 
 if __name__ == "__main__":

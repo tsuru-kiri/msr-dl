@@ -221,12 +221,14 @@ def main() -> int:
                 return 1
             logging.info(
                 "Albums: %d | Songs: %d | MSR applied: %d | PRTS applied: %d | "
-                "PRTS unchanged: %d | Missing: %d | Failed: %d",
+                "PRTS unchanged: %d | PRTS unavailable: %d | Missing: %d | "
+                "Failed: %d",
                 report.albums,
                 report.songs,
                 report.msr_applied,
                 report.prts_applied,
                 report.prts_unchanged,
+                report.prts_unavailable,
                 report.missing,
                 report.failed,
             )

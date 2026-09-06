@@ -132,8 +132,9 @@ class CLITests(unittest.TestCase):
         report.albums = 1
         report.songs = 1
         report.msr_applied = 0
-        report.prts_applied = 1
+        report.prts_applied = 0
         report.prts_unchanged = 0
+        report.prts_unavailable = 1
         report.missing = 0
 
         with (
@@ -150,11 +151,13 @@ class CLITests(unittest.TestCase):
                 ],
             ),
             patch("main.MetadataApplier") as applier,
+            self.assertLogs(level="INFO") as logs,
         ):
             applier.return_value.run.return_value = report
             result = main.main()
 
         self.assertEqual(result, 0)
+        self.assertTrue(any("PRTS unavailable: 1" in line for line in logs.output))
         applier.assert_called_once_with(
             main.MetadataApplyConfig(
                 output_dir=Path("/tmp/music"),

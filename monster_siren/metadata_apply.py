@@ -43,6 +43,7 @@ class MetadataApplyReport:
     msr_applied: int = 0
     prts_applied: int = 0
     prts_unchanged: int = 0
+    prts_unavailable: int = 0
     missing: int = 0
     failed: int = 0
 
@@ -207,7 +208,9 @@ class MetadataApplier:
             self.config.force or state_song.prts_fingerprint != prts.fingerprint
         )
         if not self.config.apply_all and not apply_prts:
-            if prts is not None:
+            if prts is None:
+                report.prts_unavailable += 1
+            else:
                 report.prts_unchanged += 1
             return
 
@@ -245,6 +248,8 @@ class MetadataApplier:
 
         if apply_prts:
             report.prts_applied += 1
+        elif prts is None:
+            report.prts_unavailable += 1
         else:
             report.prts_unchanged += 1
         self.state.mark_metadata_applied(
