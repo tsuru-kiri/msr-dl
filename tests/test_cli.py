@@ -109,6 +109,21 @@ class CLITests(unittest.TestCase):
         self.assertEqual(lines[1], "----+------------+--------")
         self.assertEqual(lines[2].split("|")[0].strip(), "a1")
 
+    def test_list_albums_normalizes_album_names(self) -> None:
+        class SpacedAlbumAPI(FakeAPI):
+            def get_albums(self) -> list[dict[str, object]]:
+                return [{"cid": "a1", "name": " 앨범 ", "artistes": ["Artist"]}]
+
+        with (
+            patch("main.MonsterSirenAPI", SpacedAlbumAPI),
+            patch("main._format_table", return_value="") as format_table,
+            redirect_stdout(io.StringIO()),
+        ):
+            result = main.list_catalog(None)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(format_table.call_args.args[1][0][1], "앨범")
+
     def test_list_album_songs_prints_tracks(self) -> None:
         output = io.StringIO()
         with patch("main.MonsterSirenAPI", FakeAPI), redirect_stdout(output):

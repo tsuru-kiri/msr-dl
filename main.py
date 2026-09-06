@@ -12,6 +12,7 @@ from monster_siren.api import MonsterSirenAPI
 from monster_siren.downloader import Downloader, DownloaderConfig
 from monster_siren.metadata import DEFAULT_ALIASES_PATH
 from monster_siren.prts import update_metadata_snapshot
+from monster_siren.utils import normalize_album_name
 
 try:
     VERSION = version("msr-dl")
@@ -101,7 +102,7 @@ def list_catalog(album_cid: str | None) -> int:
             rows = [
                 (
                     album["cid"],
-                    album["name"],
+                    normalize_album_name(album["name"]),
                     ", ".join(Downloader._string_list(album.get("artistes"))) or "-",
                 )
                 for album in api.get_albums()
