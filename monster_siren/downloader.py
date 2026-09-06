@@ -128,9 +128,8 @@ class Downloader:
         album_cid = album["cid"]
         album_name = normalize_album_name(album["name"])
         album_metadata = self.metadata.album(album_cid)
-        album_artists = self._resolve_album_artists(
-            self._string_list(album.get("artistes")), album_metadata
-        )
+        msr_album_artists = self._string_list(album.get("artistes"))
+        album_artists = self._resolve_album_artists(msr_album_artists, album_metadata)
         song_artist_fallback = (
             list(album_metadata.artists)
             if album_metadata is not None
@@ -180,6 +179,14 @@ class Downloader:
                             track_number=track_number,
                             track_width=track_width,
                             release_date=release_date,
+                            prts_fingerprint=(
+                                album_metadata.fingerprint
+                                if album_metadata is not None
+                                else None
+                            ),
+                            prts_album_artists=(
+                                not msr_album_artists and album_metadata is not None
+                            ),
                         )
                     except Exception as exc:
                         album_failed = True
@@ -221,6 +228,8 @@ class Downloader:
         track_width: int,
         song_artist_fallback: list[str] | None = None,
         release_date: str | None = None,
+        prts_fingerprint: str | None = None,
+        prts_album_artists: bool = False,
     ) -> None:
         song_cid = song["cid"]
         song_name = song["name"]
@@ -247,9 +256,11 @@ class Downloader:
         detail = api.get_song_detail(song_cid)
         source_url = detail["sourceUrl"]
         lyric_url = detail.get("lyricUrl")
+        summary_artists = self._string_list(song.get("artistes"))
+        detail_artists = self._string_list(detail.get("artists"))
         artists = self._resolve_song_artists(
-            self._string_list(song.get("artistes")),
-            self._string_list(detail.get("artists")),
+            summary_artists,
+            detail_artists,
             song_artist_fallback if song_artist_fallback is not None else album_artists,
         )
 
@@ -319,6 +330,13 @@ class Downloader:
             output_path=audio_path,
             lyric_path=final_lyric_path,
             lyrics_complete=self.config.download_lyrics,
+            prts_fingerprint=prts_fingerprint,
+            prts_album_artists=prts_album_artists,
+            prts_song_artists=(
+                prts_fingerprint is not None
+                and not summary_artists
+                and not detail_artists
+            ),
         )
         logging.info("Completed: %s / %s", album_name, song_name)
 

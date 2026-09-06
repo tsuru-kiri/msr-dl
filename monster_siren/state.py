@@ -6,14 +6,29 @@ import os
 import tempfile
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+@dataclass(frozen=True)
+class CompletedSong:
+    album_cid: str
+    album_name: str
+    song_cid: str
+    song_name: str
+    output_path: Path | None
+    lyric_path: Path | None
+    lyrics_complete: bool
+    prts_fingerprint: str | None
+    prts_album_artists: bool
+    prts_song_artists: bool
 
 
 class DownloadState:
     """Thread-safe, atomic JSON state store keyed by album/song cid."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -134,6 +149,9 @@ class DownloadState:
         output_path: Path | None = None,
         lyric_path: Path | None = None,
         lyrics_complete: bool = False,
+        prts_fingerprint: str | None = None,
+        prts_album_artists: bool = False,
+        prts_song_artists: bool = False,
     ) -> None:
         with self._lock:
             albums = self._data.setdefault("albums", {})
@@ -163,10 +181,104 @@ class DownloadState:
                 )
                 song["lyrics_size"] = lyric_path.stat().st_size
             song["lyrics_complete"] = lyrics_complete
+            if prts_fingerprint is not None:
+                song["prtsMetadataFingerprint"] = prts_fingerprint
+                song["prtsAlbumArtists"] = prts_album_artists
+                song["prtsSongArtists"] = prts_song_artists
             songs[song_cid] = song
             if status != "complete":
                 album.pop("status", None)
             self._save_locked()
+
+    def completed_songs(self) -> list[CompletedSong]:
+        with self._lock:
+            result: list[CompletedSong] = []
+            albums = self._data.get("albums", {})
+            if not isinstance(albums, dict):
+                return result
+            for album_cid, album in albums.items():
+                if not isinstance(album_cid, str) or not isinstance(album, dict):
+                    continue
+                songs = album.get("songs", {})
+                if not isinstance(songs, dict):
+                    continue
+                for song_cid, song in songs.items():
+                    if (
+                        not isinstance(song_cid, str)
+                        or not isinstance(song, dict)
+                        or song.get("status") != "complete"
+                    ):
+                        continue
+                    fingerprint = song.get("prtsMetadataFingerprint")
+                    output_path = self._resolve_output(song.get("output"))
+                    if output_path is None:
+                        continue
+                    result.append(
+                        CompletedSong(
+                            album_cid=album_cid,
+                            album_name=str(album.get("name", "")),
+                            song_cid=song_cid,
+                            song_name=str(song.get("name", "")),
+                            output_path=output_path,
+                            lyric_path=self._resolve_output(song.get("lyrics")),
+                            lyrics_complete=bool(song.get("lyrics_complete")),
+                            prts_fingerprint=(
+                                fingerprint if isinstance(fingerprint, str) else None
+                            ),
+                            prts_album_artists=bool(song.get("prtsAlbumArtists")),
+                            prts_song_artists=bool(song.get("prtsSongArtists")),
+                        )
+                    )
+            return result
+
+    def song_metadata_fingerprint(self, album_cid: str, song_cid: str) -> str | None:
+        with self._lock:
+            song = self._song_record_locked(album_cid, song_cid)
+            if song is None:
+                return None
+            fingerprint = song.get("prtsMetadataFingerprint")
+            return fingerprint if isinstance(fingerprint, str) else None
+
+    def mark_metadata_applied(
+        self,
+        album_cid: str,
+        song_cid: str,
+        output_path: Path,
+        prts_fingerprint: str | None,
+        *,
+        prts_album_artists: bool | None = None,
+        prts_song_artists: bool | None = None,
+    ) -> None:
+        with self._lock:
+            song = self._song_record_locked(album_cid, song_cid)
+            if song is None or song.get("status") != "complete":
+                raise ValueError(f"Song is not complete in state: {song_cid}")
+            recorded = self._resolve_output(song.get("output"))
+            if recorded is None or recorded != output_path.resolve():
+                raise ValueError(f"Song output does not match state: {song_cid}")
+            song["size"] = output_path.stat().st_size
+            if prts_fingerprint is not None:
+                song["prtsMetadataFingerprint"] = prts_fingerprint
+            if prts_album_artists is not None:
+                song["prtsAlbumArtists"] = prts_album_artists
+            if prts_song_artists is not None:
+                song["prtsSongArtists"] = prts_song_artists
+            self._save_locked()
+
+    def _song_record_locked(
+        self, album_cid: str, song_cid: str
+    ) -> dict[str, Any] | None:
+        albums = self._data.get("albums", {})
+        if not isinstance(albums, dict):
+            return None
+        album = albums.get(album_cid, {})
+        if not isinstance(album, dict):
+            return None
+        songs = album.get("songs", {})
+        if not isinstance(songs, dict):
+            return None
+        song = songs.get(song_cid, {})
+        return song if isinstance(song, dict) else None
 
     def mark_album_started(self, album_cid: str, album_name: str) -> None:
         with self._lock:

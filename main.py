@@ -11,6 +11,7 @@ from monster_siren import __version__
 from monster_siren.api import MonsterSirenAPI
 from monster_siren.downloader import Downloader, DownloaderConfig
 from monster_siren.metadata import DEFAULT_ALIASES_PATH
+from monster_siren.metadata_apply import MetadataApplier, MetadataApplyConfig
 from monster_siren.prts import update_metadata_snapshot
 from monster_siren.utils import normalize_album_name
 
@@ -82,6 +83,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     update.add_argument("--aliases", type=Path, default=DEFAULT_ALIASES_PATH)
     update.add_argument("--check", action="store_true")
     update.add_argument("--verbose", action="store_true", help="Enable debug logging.")
+    apply = metadata_commands.add_parser(
+        "apply", help="Apply updated metadata to downloaded songs."
+    )
+    apply.add_argument(
+        "--output",
+        type=Path,
+        default=Path("./MonsterSiren"),
+        help="Download directory (default: ./MonsterSiren)",
+    )
+    apply.add_argument(
+        "--snapshot",
+        type=Path,
+        help="Use this PRTS metadata snapshot instead of the bundled snapshot.",
+    )
+    apply_targets = apply.add_mutually_exclusive_group()
+    apply_targets.add_argument(
+        "--album",
+        action="append",
+        default=[],
+        help="Only update albums whose name contains this text. Repeatable.",
+    )
+    apply_targets.add_argument("--album-cid", help="Update the album with this CID.")
+    apply_targets.add_argument("--song-cid", help="Update the song with this CID.")
+    apply.add_argument(
+        "--all",
+        action="store_true",
+        dest="apply_all",
+        help="Reapply all Monster Siren metadata and local artwork and lyrics.",
+    )
+    apply.add_argument(
+        "--force",
+        action="store_true",
+        help="Reapply PRTS metadata even when its fingerprint is unchanged.",
+    )
+    apply.add_argument("--verbose", action="store_true", help="Enable debug logging.")
 
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments or arguments[0] not in {
@@ -165,6 +201,37 @@ def main() -> int:
             return 1
 
     if args.command == "metadata":
+        if args.metadata_command == "apply":
+            config = MetadataApplyConfig(
+                output_dir=args.output,
+                metadata_snapshot=args.snapshot,
+                album_filters=tuple(args.album),
+                album_cid=args.album_cid,
+                song_cid=args.song_cid,
+                apply_all=args.apply_all,
+                force=args.force,
+            )
+            try:
+                report = MetadataApplier(config).run()
+            except KeyboardInterrupt:
+                logging.warning("Interrupted by user.")
+                return 130
+            except Exception:
+                logging.exception("Could not apply metadata to downloaded songs.")
+                return 1
+            logging.info(
+                "Albums: %d | Songs: %d | MSR applied: %d | PRTS applied: %d | "
+                "PRTS unchanged: %d | Missing: %d | Failed: %d",
+                report.albums,
+                report.songs,
+                report.msr_applied,
+                report.prts_applied,
+                report.prts_unchanged,
+                report.missing,
+                report.failed,
+            )
+            return 1 if report.failed else 0
+
         try:
             report = update_metadata_snapshot(
                 args.snapshot, args.aliases, check=args.check

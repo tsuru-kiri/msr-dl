@@ -10,6 +10,7 @@ from monster_siren.metadata import (
     DEFAULT_SNAPSHOT_PATH,
     MetadataSnapshot,
     load_aliases,
+    metadata_fingerprint,
     publish_snapshot,
 )
 from monster_siren.utils import normalize_album_name
@@ -25,9 +26,7 @@ class MetadataTests(unittest.TestCase):
 
         snapshot = json.loads(DEFAULT_SNAPSHOT_PATH.read_text(encoding="utf-8"))
         for record in snapshot["albums"].values():
-            self.assertEqual(
-                record["msrName"], normalize_album_name(record["msrName"])
-            )
+            self.assertEqual(record["msrName"], normalize_album_name(record["msrName"]))
 
     def test_existing_unmatched_record_is_retained_during_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -131,7 +130,54 @@ class MetadataTests(unittest.TestCase):
 
         self.assertEqual(snapshot.album("0242").release_date, "2023-11-25")
         self.assertEqual(snapshot.album("0242").artists, ("塞壬唱片-MSR", "kiyo"))
+        self.assertEqual(
+            snapshot.album("0242").fingerprint,
+            metadata_fingerprint("0242", "2023-11-25", ("塞壬唱片-MSR", "kiyo")),
+        )
         self.assertIsNone(snapshot.album("missing"))
+
+    def test_publish_writes_version_two_album_fingerprints(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snapshot.json"
+            publish_snapshot(
+                path,
+                {
+                    "version": 1,
+                    "generatedAt": "now",
+                    "albums": {
+                        "0242": {
+                            "msrName": "Fleeting Wish",
+                            "prtsTitle": "Fleeting Wish",
+                            "releaseDate": "2023-11-25",
+                            "artists": ["塞壬唱片-MSR", "kiyo"],
+                        }
+                    },
+                },
+                unmatched=[],
+            )
+
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["version"], 2)
+            self.assertEqual(
+                saved["albums"]["0242"]["fingerprint"],
+                metadata_fingerprint("0242", "2023-11-25", ("塞壬唱片-MSR", "kiyo")),
+            )
+
+    def test_version_two_snapshot_rejects_a_stale_fingerprint(self) -> None:
+        with self.assertRaisesRegex(ValueError, "fingerprint"):
+            MetadataSnapshot.from_data(
+                {
+                    "version": 2,
+                    "generatedAt": "now",
+                    "albums": {
+                        "0242": {
+                            "releaseDate": "2023-11-25",
+                            "artists": ["塞壬唱片-MSR", "kiyo"],
+                            "fingerprint": "sha256:stale",
+                        }
+                    },
+                }
+            )
 
 
 if __name__ == "__main__":

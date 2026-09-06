@@ -98,6 +98,70 @@ class CLITests(unittest.TestCase):
             Path("/tmp/meta.json"), main.DEFAULT_ALIASES_PATH, check=False
         )
 
+    def test_metadata_apply_accepts_targets_all_and_force(self) -> None:
+        args = main.parse_args(
+            [
+                "metadata",
+                "apply",
+                "--output",
+                "/tmp/music",
+                "--snapshot",
+                "/tmp/meta.json",
+                "--song-cid",
+                "s1",
+                "--all",
+                "--force",
+            ]
+        )
+
+        self.assertEqual(args.metadata_command, "apply")
+        self.assertEqual(args.output, Path("/tmp/music"))
+        self.assertEqual(args.snapshot, Path("/tmp/meta.json"))
+        self.assertEqual(args.song_cid, "s1")
+        self.assertTrue(args.apply_all)
+        self.assertTrue(args.force)
+
+    def test_metadata_apply_targets_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(SystemExit):
+            main.parse_args(
+                ["metadata", "apply", "--album-cid", "a1", "--song-cid", "s1"]
+            )
+
+    def test_metadata_apply_command_runs_without_downloader(self) -> None:
+        report = Mock(failed=0)
+        report.albums = 1
+        report.songs = 1
+        report.msr_applied = 0
+        report.prts_applied = 1
+        report.prts_unchanged = 0
+        report.missing = 0
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "msr-dl",
+                    "metadata",
+                    "apply",
+                    "--output",
+                    "/tmp/music",
+                    "--snapshot",
+                    "/tmp/meta.json",
+                ],
+            ),
+            patch("main.MetadataApplier") as applier,
+        ):
+            applier.return_value.run.return_value = report
+            result = main.main()
+
+        self.assertEqual(result, 0)
+        applier.assert_called_once_with(
+            main.MetadataApplyConfig(
+                output_dir=Path("/tmp/music"),
+                metadata_snapshot=Path("/tmp/meta.json"),
+            )
+        )
+
     def test_list_albums_prints_catalog_without_downloader(self) -> None:
         output = io.StringIO()
         with patch("main.MonsterSirenAPI", FakeAPI), redirect_stdout(output):

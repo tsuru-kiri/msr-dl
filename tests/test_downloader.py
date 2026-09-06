@@ -191,6 +191,11 @@ class DownloaderTests(unittest.TestCase):
             self.assertEqual(kwargs["album_artists"], ["塞壬唱片-MSR", "kiyo"])
             self.assertEqual(kwargs["song_artist_fallback"], ["塞壬唱片-MSR", "kiyo"])
             self.assertEqual(kwargs["release_date"], "2023-11-25")
+            self.assertEqual(
+                kwargs["prts_fingerprint"],
+                downloader.metadata.album("a1").fingerprint,
+            )
+            self.assertTrue(kwargs["prts_album_artists"])
             state = json.loads(
                 (root / "output" / "download_state.json").read_text(encoding="utf-8")
             )

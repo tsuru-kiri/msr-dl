@@ -10,7 +10,12 @@ from typing import Any
 import requests
 
 from .api import MAX_API_BYTES, MonsterSirenAPI
-from .metadata import PublishResult, load_aliases, publish_snapshot
+from .metadata import (
+    PublishResult,
+    load_aliases,
+    metadata_fingerprint,
+    publish_snapshot,
+)
 from .utils import normalize_album_name
 
 MONSTER_SIREN_ARTIST = "塞壬唱片-MSR"
@@ -308,10 +313,13 @@ def build_snapshot(
             "prtsTitle": prts_title,
             "releaseDate": release.release_date,
             "artists": list(release.artists),
+            "fingerprint": metadata_fingerprint(
+                cid, release.release_date, release.artists
+            ),
         }
     return (
         {
-            "version": 1,
+            "version": 2,
             "generatedAt": datetime.now(UTC).isoformat(),
             "albums": records,
         },

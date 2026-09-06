@@ -101,6 +101,38 @@ when Monster Siren's album or song artist data is empty. PRTS release dates
 replace source dates. Without a PRTS date, valid MP3/FLAC dates are preserved,
 but WAV production metadata is discarded during FLAC conversion.
 
+Apply updated PRTS metadata to files that are already downloaded without
+downloading their audio, covers, or lyrics again:
+
+```bash
+msr-dl metadata apply
+msr-dl metadata apply --output ~/Music/MonsterSiren
+msr-dl metadata apply --snapshot /config/prts-metadata.json
+msr-dl metadata apply --album-cid 0239
+msr-dl metadata apply --song-cid <song-cid>
+```
+
+By default, only PRTS release dates and artist fallbacks whose album fingerprint
+has changed are applied. `--force` reapplies those PRTS values even when their
+fingerprint is unchanged. `--all` always reapplies current Monster Siren tags
+and the existing local cover and lyrics, while still preserving unchanged PRTS
+values. Combine both options to reapply everything:
+
+```bash
+msr-dl metadata apply --all
+msr-dl metadata apply --all --force
+```
+
+Metadata application keeps existing file and directory names. Explicit album
+or song targets must have at least one completed download in the state file.
+For a partially downloaded album, only completed songs are updated and missing
+songs are reported. Do not run downloads and metadata application against the
+same output directory at the same time.
+
+Newly generated PRTS snapshots use version 2 and store a SHA-256 fingerprint
+for each album's CID, release date, and ordered artist list. Version 1 snapshots
+remain readable and have fingerprints calculated in memory.
+
 ## Output and state
 
 ```text
@@ -112,9 +144,12 @@ MonsterSiren/
     01 - Song name [song-cid].lrc
 ```
 
-State version 2 records each output's relative path and size. A failed song is
-retried on the next run. A completed song is skipped only when its recorded
-output still exists and matches the current album, track, song name, and CID.
+State version 3 records each output's relative path and size, plus the PRTS
+fingerprint and whether its album/song artists came from the PRTS fallback.
+This provenance lets later MSR artist additions replace an old fallback safely.
+A failed song is retried on the next run. A completed song is skipped only when
+its recorded output still exists and matches the current album, track, song
+name, and CID.
 
 Version 1 state entries have no output path, so they are treated as stale and
 downloaded into the CID-based layout. Do not run multiple downloader processes
@@ -137,6 +172,9 @@ monster_siren/
   api.py          HTTP/API validation, retries, and streaming
   audio.py        media detection, WAV -> FLAC, tags, cover, and lyrics
   downloader.py   orchestration and album concurrency
+  metadata.py     PRTS snapshot loading, fingerprints, and publishing
+  metadata_apply.py  metadata application to completed downloads
+  prts.py         PRTS Wiki parsing and snapshot generation
   state.py        resumable state and atomic persistence
   utils.py        portable unique paths and cover conversion
 ```

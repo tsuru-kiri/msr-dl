@@ -135,12 +135,13 @@ def write_metadata(
     *,
     album: str,
     title: str,
-    album_artists: list[str],
-    artists: list[str],
+    album_artists: list[str] | None,
+    artists: list[str] | None,
     track_number: int,
     cover_path: Path,
     lyric_path: Path | None,
     release_date: str | None = None,
+    preserve_date: bool = False,
 ) -> None:
     suffix = audio_path.suffix.lower()
 
@@ -151,10 +152,13 @@ def write_metadata(
             tags = EasyID3()
         tags["album"] = album
         tags["title"] = title
-        tags["albumartist"] = _artist_text(album_artists)
-        tags["artist"] = _artist_text(artists)
+        if album_artists is not None:
+            tags["albumartist"] = _artist_text(album_artists)
+        if artists is not None:
+            tags["artist"] = _artist_text(artists)
         tags["tracknumber"] = str(track_number)
-        _set_date(tags, release_date)
+        if not preserve_date:
+            _set_date(tags, release_date)
         tags.save(audio_path)
 
         id3 = ID3(audio_path)
@@ -191,10 +195,13 @@ def write_metadata(
     flac = FLAC(audio_path)
     flac["album"] = album
     flac["title"] = title
-    flac["albumartist"] = _artist_text(album_artists)
-    flac["artist"] = _artist_text(artists)
+    if album_artists is not None:
+        flac["albumartist"] = _artist_text(album_artists)
+    if artists is not None:
+        flac["artist"] = _artist_text(artists)
     flac["tracknumber"] = str(track_number)
-    _set_date(flac, release_date)
+    if not preserve_date:
+        _set_date(flac, release_date)
 
     flac.clear_pictures()
     picture = Picture()
@@ -212,4 +219,36 @@ def write_metadata(
     elif "lyrics" in flac:
         del flac["lyrics"]
 
+    flac.save()
+
+
+def apply_prts_metadata(
+    audio_path: Path,
+    *,
+    release_date: str,
+    album_artists: list[str] | None,
+    artists: list[str] | None,
+) -> None:
+    suffix = audio_path.suffix.lower()
+    if suffix == ".mp3":
+        try:
+            tags = EasyID3(audio_path)
+        except ID3NoHeaderError:
+            tags = EasyID3()
+        tags["date"] = release_date
+        if album_artists is not None:
+            tags["albumartist"] = _artist_text(album_artists)
+        if artists is not None:
+            tags["artist"] = _artist_text(artists)
+        tags.save(audio_path)
+        return
+
+    if suffix != ".flac":
+        raise ValueError(f"Unsupported output type: {suffix}")
+    flac = FLAC(audio_path)
+    flac["date"] = release_date
+    if album_artists is not None:
+        flac["albumartist"] = _artist_text(album_artists)
+    if artists is not None:
+        flac["artist"] = _artist_text(artists)
     flac.save()

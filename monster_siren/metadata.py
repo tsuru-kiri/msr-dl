@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ DEFAULT_SNAPSHOT_PATH = Path(__file__).with_name("data") / "prts-metadata.json"
 class AlbumMetadata:
     release_date: str
     artists: tuple[str, ...]
+    fingerprint: str = ""
 
 
 @dataclass(frozen=True)
@@ -41,9 +43,10 @@ class MetadataSnapshot:
     @classmethod
     def from_data(cls, data: object) -> MetadataSnapshot:
         root = _root(data, "metadata snapshot")
-        if root.get("version") != 1 or not isinstance(root.get("albums"), dict):
+        version = root.get("version")
+        if version not in {1, 2} or not isinstance(root.get("albums"), dict):
             raise ValueError(
-                "Metadata snapshot must have version 1 and an albums object"
+                "Metadata snapshot must have version 1 or 2 and an albums object"
             )
         albums: dict[str, AlbumMetadata] = {}
         for cid, value in root["albums"].items():
@@ -64,7 +67,12 @@ class MetadataSnapshot:
                 isinstance(artist, str) and artist for artist in artists
             ):
                 raise ValueError(f"Metadata snapshot album {cid} has invalid artists")
-            albums[cid] = AlbumMetadata(release_date, tuple(artists))
+            fingerprint = metadata_fingerprint(cid, release_date, tuple(artists))
+            if version == 2 and record.get("fingerprint") != fingerprint:
+                raise ValueError(
+                    f"Metadata snapshot album {cid} has an invalid fingerprint"
+                )
+            albums[cid] = AlbumMetadata(release_date, tuple(artists), fingerprint)
         return cls(albums)
 
     def album(self, cid: str) -> AlbumMetadata | None:
@@ -75,6 +83,32 @@ def _root(value: object, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"Invalid {label}")
     return value
+
+
+def metadata_fingerprint(cid: str, release_date: str, artists: tuple[str, ...]) -> str:
+    canonical = json.dumps(
+        {"artists": list(artists), "cid": cid, "releaseDate": release_date},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+
+def _normalize_snapshot(data: object) -> dict[str, Any]:
+    root = _root(data, "metadata snapshot")
+    MetadataSnapshot.from_data(root)
+    normalized = dict(root)
+    normalized["version"] = 2
+    normalized_albums: dict[str, Any] = {}
+    for cid, value in _root(root["albums"], "metadata snapshot albums").items():
+        record = dict(_root(value, f"metadata snapshot album {cid}"))
+        record["fingerprint"] = metadata_fingerprint(
+            cid, record["releaseDate"], tuple(record["artists"])
+        )
+        normalized_albums[cid] = record
+    normalized["albums"] = normalized_albums
+    return normalized
 
 
 def load_aliases(path: Path) -> dict[str, str]:
@@ -97,10 +131,9 @@ def load_aliases(path: Path) -> dict[str, str]:
 
 def _load_raw_snapshot(path: Path) -> dict[str, Any]:
     if not path.exists():
-        return {"version": 1, "generatedAt": "", "albums": {}}
+        return {"version": 2, "generatedAt": "", "albums": {}}
     data = json.loads(path.read_text(encoding="utf-8"))
-    MetadataSnapshot.from_data(data)
-    return _root(data, "metadata snapshot")
+    return _normalize_snapshot(data)
 
 
 def publish_snapshot(
@@ -110,7 +143,7 @@ def publish_snapshot(
     unmatched: list[tuple[str, str]],
     check: bool = False,
 ) -> PublishResult:
-    MetadataSnapshot.from_data(candidate)
+    candidate = _normalize_snapshot(candidate)
     old = _load_raw_snapshot(path)
     old_albums = _root(old["albums"], "metadata snapshot albums")
     new_albums = _root(candidate["albums"], "candidate snapshot albums")
