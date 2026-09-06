@@ -98,7 +98,14 @@ class MetadataApplier:
                     logging.warning(
                         "%d selected song(s) have not been downloaded.", report.missing
                     )
-            for song in selected_downloads:
+            for index, song in enumerate(selected_downloads, start=1):
+                logging.info(
+                    "Applying metadata (%d/%d): %s / %s",
+                    index,
+                    len(selected_downloads),
+                    song.album_name,
+                    song.song_name,
+                )
                 try:
                     album = selected_by_cid[song.album_cid]
                     detail = detail_cache.get(song.album_cid)

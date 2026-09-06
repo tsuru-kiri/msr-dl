@@ -114,6 +114,29 @@ class MetadataApplyTests(unittest.TestCase):
                 fingerprint,
             )
 
+    def test_apply_logs_song_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot_path, _ = self._fixture(root)
+
+            with (
+                patch("monster_siren.metadata_apply.ensure_ffmpeg"),
+                patch("monster_siren.metadata_apply.MonsterSirenAPI", FakeAPI),
+                patch("monster_siren.metadata_apply.validate_audio"),
+                patch("monster_siren.metadata_apply.apply_prts_metadata"),
+                self.assertLogs(level="INFO") as logs,
+            ):
+                MetadataApplier(
+                    MetadataApplyConfig(root, metadata_snapshot=snapshot_path)
+                ).run()
+
+            self.assertTrue(
+                any(
+                    "Applying metadata (1/1): Album / Song" in message
+                    for message in logs.output
+                )
+            )
+
     def test_all_preserves_unchanged_prts_without_force(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
