@@ -21,6 +21,10 @@ _WINDOWS_RESERVED = {
 MAX_COVER_PIXELS = 40_000_000
 
 
+def normalize_album_name(name: str) -> str:
+    return name.strip(" ")
+
+
 def _truncate_utf8(value: str, max_bytes: int) -> str:
     encoded = value.encode("utf-8")
     if len(encoded) <= max_bytes:

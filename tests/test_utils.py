@@ -2,7 +2,20 @@ from __future__ import annotations
 
 import unittest
 
-from monster_siren.utils import album_directory_name, safe_filename, song_stem
+from monster_siren.utils import (
+    album_directory_name,
+    normalize_album_name,
+    safe_filename,
+    song_stem,
+)
+
+
+class AlbumNameTests(unittest.TestCase):
+    def test_only_leading_and_trailing_ascii_spaces_are_removed(self) -> None:
+        self.assertEqual(normalize_album_name("  A  B  "), "A  B")
+        self.assertEqual(normalize_album_name("\tAlbum\t"), "\tAlbum\t")
+        no_break_spaces = "\N{NO-BREAK SPACE}Album\N{NO-BREAK SPACE}"
+        self.assertEqual(normalize_album_name(no_break_spaces), no_break_spaces)
 
 
 class FilenameTests(unittest.TestCase):

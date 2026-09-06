@@ -180,13 +180,21 @@ class DownloaderTests(unittest.TestCase):
                 patch("monster_siren.downloader.is_valid_cover", return_value=True),
             ):
                 downloader._download_album(
-                    {"cid": "a1", "name": "Album", "artistes": []}
+                    {"cid": "a1", "name": " Album ", "artistes": []}
                 )
 
             kwargs = downloader._download_song.call_args.kwargs
+            self.assertEqual(kwargs["album_name"], "Album")
+            self.assertEqual(
+                kwargs["album_dir"].name, album_directory_name("Album", "a1")
+            )
             self.assertEqual(kwargs["album_artists"], ["塞壬唱片-MSR", "kiyo"])
             self.assertEqual(kwargs["song_artist_fallback"], ["塞壬唱片-MSR", "kiyo"])
             self.assertEqual(kwargs["release_date"], "2023-11-25")
+            state = json.loads(
+                (root / "output" / "download_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(state["albums"]["a1"]["name"], "Album")
 
     def test_prts_song_fallback_is_kept_when_msr_album_artist_exists(self) -> None:
         class AlbumAPI:

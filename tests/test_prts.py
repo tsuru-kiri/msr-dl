@@ -238,6 +238,7 @@ class PRTSTests(unittest.TestCase):
         releases = parse_music_table(MUSIC_TABLE)
         albums = [
             {"cid": "7774", "name": "Fleeting Wish"},
+            {"cid": "spaced", "name": " Fleeting Wish "},
             {"cid": "0242", "name": "Fleeting Wish (Monster Siren Records)"},
             {
                 "cid": "0248",
@@ -256,6 +257,8 @@ class PRTSTests(unittest.TestCase):
             snapshot["albums"]["0248"]["prtsTitle"],
             "音律联觉-灯下定影原声EP",
         )
+        self.assertEqual(snapshot["albums"]["spaced"]["msrName"], "Fleeting Wish")
+        self.assertEqual(snapshot["albums"]["spaced"]["prtsTitle"], "Fleeting Wish")
         self.assertEqual(unmatched, [("missing", "Not Present")])
 
     def test_conflicting_duplicate_dates_are_rejected(self) -> None:

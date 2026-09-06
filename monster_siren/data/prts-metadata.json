@@ -270,7 +270,7 @@
         "塞壬唱片-MSR",
         "SHIKI"
       ],
-      "msrName": " Epilogue",
+      "msrName": "Epilogue",
       "prtsTitle": "Epilogue",
       "releaseDate": "2025-02-14"
     },
@@ -1900,7 +1900,7 @@
         "塞壬唱片-MSR",
         "Adam Gubman"
       ],
-      "msrName": "Morning Dew ",
+      "msrName": "Morning Dew",
       "prtsTitle": "Morning Dew",
       "releaseDate": "2023-05-01"
     },
@@ -2067,7 +2067,7 @@
         "塞壬唱片-MSR",
         "ADÀI宋黛霆 / David Lin / Robert Wolf / Obadiah Brown-Beach"
       ],
-      "msrName": "Skeletal Wings ",
+      "msrName": "Skeletal Wings",
       "prtsTitle": "Skeletal Wings",
       "releaseDate": "2025-04-07"
     },
@@ -2091,7 +2091,7 @@
       "artists": [
         "塞壬唱片-MSR"
       ],
-      "msrName": " 直到大地变成一颗酸橙OST",
+      "msrName": "直到大地变成一颗酸橙OST",
       "prtsTitle": "直到大地变成一颗酸橙OST",
       "releaseDate": "2026-08-03"
     },
@@ -2169,7 +2169,7 @@
         "塞壬唱片-MSR",
         "Erik Castro"
       ],
-      "msrName": "Dormant Craving ",
+      "msrName": "Dormant Craving",
       "prtsTitle": "Dormant Craving",
       "releaseDate": "2023-05-02"
     },
@@ -2411,7 +2411,7 @@
         "塞壬唱片-MSR",
         "Obadiah Brown-Beach/David Lin/金小鱼"
       ],
-      "msrName": "Best Moments of... ",
+      "msrName": "Best Moments of...",
       "prtsTitle": "Best Moments of...",
       "releaseDate": "2023-10-20"
     },
@@ -2429,7 +2429,7 @@
         "塞壬唱片-MSR",
         "Obadiah Brown-Beach"
       ],
-      "msrName": "The cure ",
+      "msrName": "The cure",
       "prtsTitle": "The cure",
       "releaseDate": "2023-05-03"
     },
@@ -2521,6 +2521,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-09-05T19:37:48.695494+00:00",
+  "generatedAt": "2026-09-06T02:30:33.756440+00:00",
   "version": 1
 }

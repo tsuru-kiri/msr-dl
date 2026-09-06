@@ -21,7 +21,13 @@ from .metadata import (
     MetadataSnapshot,
 )
 from .state import DownloadState
-from .utils import album_directory_name, is_valid_cover, save_cover_as_png, song_stem
+from .utils import (
+    album_directory_name,
+    is_valid_cover,
+    normalize_album_name,
+    save_cover_as_png,
+    song_stem,
+)
 
 
 @dataclass(frozen=True)
@@ -120,7 +126,7 @@ class Downloader:
         self, album: dict[str, Any], song_cid: str | None = None
     ) -> None:
         album_cid = album["cid"]
-        album_name = album["name"]
+        album_name = normalize_album_name(album["name"])
         album_metadata = self.metadata.album(album_cid)
         album_artists = self._resolve_album_artists(
             self._string_list(album.get("artistes")), album_metadata

@@ -91,10 +91,10 @@ Use `--check` to report changes without writing the snapshot. The updater makes
 one Monster Siren album-list request and one PRTS music-overview request. It
 does not visit individual album pages or search for unmatched titles.
 
-Album names are matched exactly and case-sensitively. Name differences are
-maintained by CID in the aliases JSON. Existing unmatched records are retained
-when a snapshot is updated, while new unmatched albums are reported and
-omitted.
+Leading and trailing ASCII spaces are removed from album names before they are
+matched exactly and case-sensitively. Other name differences are maintained by
+CID in the aliases JSON. Existing unmatched records are retained when a
+snapshot is updated, while new unmatched albums are reported and omitted.
 
 PRTS artists are normalized to include `塞壬唱片-MSR` first. They are used only
 when Monster Siren's album or song artist data is empty. PRTS release dates

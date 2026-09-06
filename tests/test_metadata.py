@@ -6,13 +6,29 @@ import unittest
 from pathlib import Path
 
 from monster_siren.metadata import (
+    DEFAULT_ALIASES_PATH,
+    DEFAULT_SNAPSHOT_PATH,
     MetadataSnapshot,
     load_aliases,
     publish_snapshot,
 )
+from monster_siren.utils import normalize_album_name
 
 
 class MetadataTests(unittest.TestCase):
+    def test_bundled_metadata_has_canonical_album_names(self) -> None:
+        aliases = json.loads(DEFAULT_ALIASES_PATH.read_text(encoding="utf-8"))
+        for record in aliases["albums"].values():
+            self.assertNotEqual(
+                normalize_album_name(record["msrName"]), record["prtsTitle"]
+            )
+
+        snapshot = json.loads(DEFAULT_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        for record in snapshot["albums"].values():
+            self.assertEqual(
+                record["msrName"], normalize_album_name(record["msrName"])
+            )
+
     def test_existing_unmatched_record_is_retained_during_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "snapshot.json"

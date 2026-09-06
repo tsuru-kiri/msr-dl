@@ -11,6 +11,7 @@ import requests
 
 from .api import MAX_API_BYTES, MonsterSirenAPI
 from .metadata import PublishResult, load_aliases, publish_snapshot
+from .utils import normalize_album_name
 
 MONSTER_SIREN_ARTIST = "塞壬唱片-MSR"
 PRTS_MUSIC_URL = "https://prts.wiki/w/衍生作品/音乐"
@@ -296,7 +297,7 @@ def build_snapshot(
     unmatched: list[tuple[str, str]] = []
     for album in albums:
         cid = album["cid"]
-        name = album["name"]
+        name = normalize_album_name(album["name"])
         prts_title = aliases.get(cid, name)
         release = releases.get(prts_title)
         if release is None:
