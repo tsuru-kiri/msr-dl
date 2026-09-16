@@ -32,6 +32,28 @@ uv venv
 uv sync
 ```
 
+## Standalone executable
+
+Build a single-file executable for the current operating system:
+
+```bash
+uv sync --extra build
+uv run pyinstaller --clean --noconfirm msr-dl.spec
+```
+
+The executable is written to `dist/msr-dl` (`dist/msr-dl.exe` on Windows).
+Run a quick check with:
+
+```bash
+./dist/msr-dl --version
+```
+
+PyInstaller output is specific to the operating system and CPU architecture on
+which it is built, so build separately on each target platform. FFmpeg is not
+embedded; it must still be installed and available on `PATH` when downloading
+or applying metadata. The bundled PRTS JSON snapshot and aliases are included
+in the executable.
+
 ## Run
 
 Download everything:
