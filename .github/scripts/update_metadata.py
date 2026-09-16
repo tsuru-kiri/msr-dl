@@ -21,9 +21,7 @@ def main() -> int:
     )
     report = {
         "albums": result.albums,
-        "unmatched": [
-            {"cid": cid, "name": name} for cid, name in result.unmatched
-        ],
+        "unmatched": [{"cid": cid, "name": name} for cid, name in result.unmatched],
         "publish": asdict(result.publish),
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
