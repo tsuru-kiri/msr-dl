@@ -2,7 +2,7 @@
 
 ## Project scope
 
-`msr-dl` is a Python 3.10–3.13 CLI that downloads the Monster Siren catalog,
+`msr-dl` is a Python 3.11–3.13 CLI that downloads the Monster Siren catalog,
 preserves MP3 sources, converts WAV to FLAC, embeds artwork and synchronized
 lyrics, and augments incomplete source metadata with a PRTS snapshot.
 

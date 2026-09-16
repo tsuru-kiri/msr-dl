@@ -15,7 +15,7 @@ cover art, metadata, and synchronized lyrics.
 
 ## Quick start
 
-Python 3.10–3.13 and FFmpeg available on `PATH` are required.
+Python 3.11–3.13 and FFmpeg available on `PATH` are required.
 
 ```bash
 python -m pip install -e .

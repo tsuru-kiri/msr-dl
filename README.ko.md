@@ -15,7 +15,7 @@ Monster Siren Records 음원을 앨범 아트, 메타데이터, 싱크 가사와
 
 ## 빠른 시작
 
-Python 3.10–3.13과 `PATH`에서 실행 가능한 FFmpeg가 필요합니다.
+Python 3.11–3.13과 `PATH`에서 실행 가능한 FFmpeg가 필요합니다.
 
 ```bash
 python -m pip install -e .

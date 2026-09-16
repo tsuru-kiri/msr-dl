@@ -2,7 +2,7 @@
 
 ## Installation
 
-Python 3.10–3.13 and FFmpeg available on `PATH` are required. Install the
+Python 3.11–3.13 and FFmpeg available on `PATH` are required. Install the
 working tree with pip or uv.
 
 ```bash
@@ -88,4 +88,3 @@ again. A corrupt state file is preserved in the same directory with a
 
 Do not run multiple downloader processes against the same output directory, or
 run downloads and `metadata apply` against that directory at the same time.
-
