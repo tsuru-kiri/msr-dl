@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from monster_siren.downloader import Downloader, DownloaderConfig, DownloadReport
-from monster_siren.metadata import AlbumMetadata
+from monster_siren.metadata import DEFAULT_SNAPSHOT_PATH, AlbumMetadata
 from monster_siren.utils import album_directory_name, song_stem
 
 
@@ -30,6 +30,17 @@ class FakeAPI:
 
 
 class DownloaderTests(unittest.TestCase):
+    def setUp(self) -> None:
+        bundled = json.loads(DEFAULT_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        self.remote_snapshot = patch(
+            "monster_siren.metadata._fetch_remote_snapshot_data",
+            return_value=bundled,
+        )
+        self.remote_snapshot.start()
+
+    def tearDown(self) -> None:
+        self.remote_snapshot.stop()
+
     def test_same_song_names_produce_distinct_cid_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

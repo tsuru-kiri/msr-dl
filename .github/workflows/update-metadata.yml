@@ -1,0 +1,126 @@
+name: Update PRTS metadata
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - monster_siren/data/prts-aliases.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: update-prts-metadata
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install msr-dl
+        run: python -m pip install .
+
+      - name: Update metadata
+        env:
+          REPORT_PATH: ${{ runner.temp }}/metadata-update-report.json
+        run: python .github/scripts/update_metadata.py --report "$REPORT_PATH"
+
+      - name: Reconcile unmatched issue
+        uses: actions/github-script@v9
+        env:
+          REPORT_PATH: ${{ runner.temp }}/metadata-update-report.json
+        with:
+          script: |
+            const fs = require("fs");
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
+            const title = "[automation] Unmatched PRTS metadata albums";
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const issue = issues.find(
+              item => !item.pull_request && item.title === title
+            );
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            if (report.unmatched.length === 0) {
+              if (issue) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `All unmatched albums have been resolved. [Workflow run](${runUrl})`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                  state_reason: "completed",
+                });
+              }
+              return;
+            }
+
+            const escapeCell = value => String(value)
+              .replaceAll("|", "\\|")
+              .replace(/\r?\n/g, " ");
+            const rows = report.unmatched
+              .map(item => `| ${escapeCell(item.cid)} | ${escapeCell(item.name)} |`)
+              .join("\n");
+            const body = [
+              "<!-- msr-dl-unmatched-metadata -->",
+              "The automated metadata update could not match these Monster Siren albums to PRTS:",
+              "",
+              "| CID | Album |",
+              "| --- | --- |",
+              rows,
+              "",
+              `Last checked by [workflow run](${runUrl}).`,
+            ].join("\n");
+
+            if (issue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+            }
+
+      - name: Commit metadata changes
+        run: |
+          if git diff --quiet -- monster_siren/data/prts-metadata.json; then
+            echo "Metadata content is unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- monster_siren/data/prts-metadata.json
+          git commit -m "chore: update PRTS metadata"
+          git push origin HEAD:main

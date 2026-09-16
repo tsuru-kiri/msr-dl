@@ -15,7 +15,7 @@ from .audio import (
     validate_audio,
     write_metadata,
 )
-from .metadata import DEFAULT_SNAPSHOT_PATH, AlbumMetadata, MetadataSnapshot
+from .metadata import AlbumMetadata, load_metadata_snapshot
 from .state import CompletedSong, DownloadState
 from .utils import is_valid_cover, normalize_album_name
 
@@ -54,9 +54,7 @@ class MetadataApplier:
         self.output_dir = config.output_dir.expanduser().resolve()
         ensure_ffmpeg()
         self.state = DownloadState(self.output_dir / "download_state.json")
-        self.metadata = MetadataSnapshot.from_path(
-            config.metadata_snapshot or DEFAULT_SNAPSHOT_PATH
-        )
+        self.metadata = load_metadata_snapshot(config.metadata_snapshot)
 
     def run(self) -> MetadataApplyReport:
         downloaded = self.state.completed_songs()

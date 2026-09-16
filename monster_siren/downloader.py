@@ -16,9 +16,8 @@ from .audio import (
     write_metadata,
 )
 from .metadata import (
-    DEFAULT_SNAPSHOT_PATH,
     AlbumMetadata,
-    MetadataSnapshot,
+    load_metadata_snapshot,
 )
 from .state import DownloadState
 from .utils import (
@@ -77,8 +76,7 @@ class Downloader:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         ensure_ffmpeg()
         self.state = DownloadState(self.output_dir / "download_state.json")
-        snapshot_path = config.metadata_snapshot or DEFAULT_SNAPSHOT_PATH
-        self.metadata = MetadataSnapshot.from_path(snapshot_path)
+        self.metadata = load_metadata_snapshot(config.metadata_snapshot)
 
     def run(self) -> DownloadReport:
         with MonsterSirenAPI() as api:

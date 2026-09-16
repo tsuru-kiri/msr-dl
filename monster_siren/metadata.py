@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import tempfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 DEFAULT_ALIASES_PATH = Path(__file__).with_name("data") / "prts-aliases.json"
 DEFAULT_SNAPSHOT_PATH = Path(__file__).with_name("data") / "prts-metadata.json"
+REMOTE_SNAPSHOT_URL = (
+    "https://raw.githubusercontent.com/tsuru-kiri/msr-dl/refs/heads/main/"
+    "monster_siren/data/prts-metadata.json"
+)
+MAX_SNAPSHOT_BYTES = 20 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -79,6 +89,86 @@ class MetadataSnapshot:
         return self._albums.get(cid)
 
 
+def _snapshot_datetime(data: object) -> datetime:
+    root = _root(data, "metadata snapshot")
+    generated_at = root.get("generatedAt")
+    if not isinstance(generated_at, str) or not generated_at:
+        raise ValueError("Metadata snapshot has no generatedAt")
+    value = generated_at[:-1] + "+00:00" if generated_at.endswith("Z") else generated_at
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("Metadata snapshot has an invalid generatedAt") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("Metadata snapshot generatedAt must include a timezone")
+    return parsed.astimezone(UTC)
+
+
+def _fetch_remote_snapshot_data(
+    url: str = REMOTE_SNAPSHOT_URL,
+    session: requests.Session | None = None,
+) -> object:
+    owns_session = session is None
+    client = session or requests.Session()
+    if owns_session:
+        retry = Retry(
+            total=4,
+            connect=4,
+            read=4,
+            status=4,
+            backoff_factor=0.8,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset({"GET"}),
+            respect_retry_after_header=True,
+        )
+        client.mount("https://", HTTPAdapter(max_retries=retry))
+    response: requests.Response | None = None
+    try:
+        response = client.get(url, timeout=(10.0, 60.0), stream=True)
+        response.raise_for_status()
+        length = response.headers.get("content-length")
+        if length and int(length) > MAX_SNAPSHOT_BYTES:
+            raise ValueError(f"Metadata snapshot exceeds {MAX_SNAPSHOT_BYTES} bytes")
+        content = bytearray()
+        for chunk in response.iter_content(chunk_size=64 * 1024):
+            content.extend(chunk)
+            if len(content) > MAX_SNAPSHOT_BYTES:
+                raise ValueError(
+                    f"Metadata snapshot exceeds {MAX_SNAPSHOT_BYTES} bytes"
+                )
+        return json.loads(content)
+    finally:
+        if response is not None:
+            response.close()
+        if owns_session:
+            client.close()
+
+
+def load_metadata_snapshot(path: Path | None = None) -> MetadataSnapshot:
+    """Load an explicit snapshot, or choose the newest bundled/remote snapshot."""
+    if path is not None:
+        return MetadataSnapshot.from_path(path)
+
+    try:
+        bundled_data = json.loads(DEFAULT_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"Could not load metadata snapshot {DEFAULT_SNAPSHOT_PATH}: {exc}"
+        ) from exc
+    bundled = MetadataSnapshot.from_data(bundled_data)
+    bundled_generated_at = _snapshot_datetime(bundled_data)
+
+    try:
+        remote_data = _fetch_remote_snapshot_data()
+        remote = MetadataSnapshot.from_data(remote_data)
+        if _snapshot_datetime(remote_data) > bundled_generated_at:
+            logging.info("Using newer remote metadata snapshot.")
+            return remote
+    except (OSError, ValueError, requests.RequestException) as exc:
+        logging.warning("Could not use remote metadata snapshot: %s", exc)
+    return bundled
+
+
 def _root(value: object, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"Invalid {label}")
@@ -133,7 +223,14 @@ def _load_raw_snapshot(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"version": 2, "generatedAt": "", "albums": {}}
     data = json.loads(path.read_text(encoding="utf-8"))
-    return _normalize_snapshot(data)
+    MetadataSnapshot.from_data(data)
+    return _root(data, "metadata snapshot")
+
+
+def _without_generated_at(snapshot: dict[str, Any]) -> dict[str, Any]:
+    comparable = dict(snapshot)
+    comparable.pop("generatedAt", None)
+    return comparable
 
 
 def publish_snapshot(
@@ -143,8 +240,10 @@ def publish_snapshot(
     unmatched: list[tuple[str, str]],
     check: bool = False,
 ) -> PublishResult:
+    existed = path.exists()
     candidate = _normalize_snapshot(candidate)
-    old = _load_raw_snapshot(path)
+    old_raw = _load_raw_snapshot(path)
+    old = _normalize_snapshot(old_raw)
     old_albums = _root(old["albums"], "metadata snapshot albums")
     new_albums = _root(candidate["albums"], "candidate snapshot albums")
 
@@ -161,7 +260,10 @@ def publish_snapshot(
     unchanged = sum(old_albums.get(cid) == record for cid, record in new_albums.items())
     updated = len(new_albums) - added - unchanged
     result = PublishResult(added, updated, unchanged, retained, new_unmatched)
-    if check:
+    content_changed = not existed or _without_generated_at(
+        candidate
+    ) != _without_generated_at(old_raw)
+    if check or not content_changed:
         return result
 
     path.parent.mkdir(parents=True, exist_ok=True)

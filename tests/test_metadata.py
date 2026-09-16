@@ -4,12 +4,15 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from monster_siren.metadata import (
     DEFAULT_ALIASES_PATH,
     DEFAULT_SNAPSHOT_PATH,
     MetadataSnapshot,
+    _fetch_remote_snapshot_data,
     load_aliases,
+    load_metadata_snapshot,
     metadata_fingerprint,
     publish_snapshot,
 )
@@ -17,6 +20,21 @@ from monster_siren.utils import normalize_album_name
 
 
 class MetadataTests(unittest.TestCase):
+    @staticmethod
+    def _snapshot(generated_at: str, cid: str) -> dict[str, object]:
+        artists = ("Artist",)
+        return {
+            "version": 2,
+            "generatedAt": generated_at,
+            "albums": {
+                cid: {
+                    "releaseDate": "2024-01-02",
+                    "artists": list(artists),
+                    "fingerprint": metadata_fingerprint(cid, "2024-01-02", artists),
+                }
+            },
+        }
+
     def test_bundled_metadata_has_canonical_album_names(self) -> None:
         aliases = json.loads(DEFAULT_ALIASES_PATH.read_text(encoding="utf-8"))
         for record in aliases["albums"].values():
@@ -86,6 +104,123 @@ class MetadataTests(unittest.TestCase):
             )
 
             self.assertEqual(path.read_text(encoding="utf-8"), original)
+
+    def test_publish_does_not_write_when_only_generated_at_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snapshot.json"
+            publish_snapshot(
+                path,
+                self._snapshot("2026-01-01T00:00:00+00:00", "a1"),
+                unmatched=[],
+            )
+            original = path.read_bytes()
+
+            publish_snapshot(
+                path,
+                self._snapshot("2026-01-02T00:00:00+00:00", "a1"),
+                unmatched=[],
+            )
+
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_default_loader_uses_newer_remote_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundled_path = Path(directory) / "bundled.json"
+            bundled_path.write_text(
+                json.dumps(self._snapshot("2026-01-01T09:00:00+09:00", "old")),
+                encoding="utf-8",
+            )
+            remote = self._snapshot("2026-01-01T00:00:01Z", "new")
+
+            with (
+                patch("monster_siren.metadata.DEFAULT_SNAPSHOT_PATH", bundled_path),
+                patch(
+                    "monster_siren.metadata._fetch_remote_snapshot_data",
+                    return_value=remote,
+                ),
+            ):
+                snapshot = load_metadata_snapshot()
+
+            self.assertIsNotNone(snapshot.album("new"))
+            self.assertIsNone(snapshot.album("old"))
+
+    def test_default_loader_keeps_bundled_when_remote_is_not_newer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundled_path = Path(directory) / "bundled.json"
+            bundled_path.write_text(
+                json.dumps(self._snapshot("2026-01-02T00:00:00+00:00", "bundled")),
+                encoding="utf-8",
+            )
+            remote = self._snapshot("2026-01-01T00:00:00+00:00", "remote")
+
+            with (
+                patch("monster_siren.metadata.DEFAULT_SNAPSHOT_PATH", bundled_path),
+                patch(
+                    "monster_siren.metadata._fetch_remote_snapshot_data",
+                    return_value=remote,
+                ),
+            ):
+                snapshot = load_metadata_snapshot()
+
+            self.assertIsNotNone(snapshot.album("bundled"))
+            self.assertIsNone(snapshot.album("remote"))
+
+    def test_default_loader_falls_back_when_remote_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundled_path = Path(directory) / "bundled.json"
+            bundled_path.write_text(
+                json.dumps(self._snapshot("2026-01-01T00:00:00+00:00", "bundled")),
+                encoding="utf-8",
+            )
+
+            with (
+                patch("monster_siren.metadata.DEFAULT_SNAPSHOT_PATH", bundled_path),
+                patch(
+                    "monster_siren.metadata._fetch_remote_snapshot_data",
+                    return_value={"version": 2, "generatedAt": "invalid", "albums": {}},
+                ),
+                self.assertLogs(level="WARNING"),
+            ):
+                snapshot = load_metadata_snapshot()
+
+            self.assertIsNotNone(snapshot.album("bundled"))
+
+    def test_explicit_snapshot_does_not_fetch_remote(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "explicit.json"
+            path.write_text(
+                json.dumps(self._snapshot("2026-01-01T00:00:00+00:00", "explicit")),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "monster_siren.metadata._fetch_remote_snapshot_data"
+            ) as fetch_remote:
+                snapshot = load_metadata_snapshot(path)
+
+            fetch_remote.assert_not_called()
+            self.assertIsNotNone(snapshot.album("explicit"))
+
+    def test_remote_snapshot_download_is_size_limited(self) -> None:
+        response = Mock()
+        response.headers = {}
+        response.iter_content.return_value = [b"123456"]
+        session = Mock()
+        session.get.return_value = response
+
+        with (
+            patch("monster_siren.metadata.MAX_SNAPSHOT_BYTES", 5),
+            self.assertRaisesRegex(ValueError, "exceeds"),
+        ):
+            _fetch_remote_snapshot_data(session=session)
+
+        session.get.assert_called_once_with(
+            "https://raw.githubusercontent.com/tsuru-kiri/msr-dl/refs/heads/main/"
+            "monster_siren/data/prts-metadata.json",
+            timeout=(10.0, 60.0),
+            stream=True,
+        )
+        response.close.assert_called_once()
 
     def test_alias_file_is_validated_and_reduced_to_cid_title_map(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

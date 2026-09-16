@@ -98,6 +98,11 @@ Use an updated PRTS metadata snapshot while downloading:
 msr-dl download --metadata-snapshot /config/prts-metadata.json
 ```
 
+Without `--metadata-snapshot`, msr-dl compares the bundled snapshot with the
+snapshot published on the repository's `main` branch and uses the one with the
+newer `generatedAt` timestamp. If the remote snapshot cannot be downloaded or
+validated, msr-dl logs a warning and continues with the bundled snapshot.
+
 ## PRTS metadata
 
 Monster Siren does not expose album release dates and occasionally omits artist
@@ -117,6 +122,11 @@ Leading and trailing ASCII spaces are removed from album names before they are
 matched exactly and case-sensitively. Other name differences are maintained by
 CID in the aliases JSON. Existing unmatched records are retained when a
 snapshot is updated, while new unmatched albums are reported and omitted.
+
+The bundled snapshot is refreshed daily by GitHub Actions and whenever
+`monster_siren/data/prts-aliases.json` changes. An update that changes only
+`generatedAt` is not committed. Unmatched albums are maintained in a single
+automation issue, which is closed automatically after all matches are resolved.
 
 PRTS artists are normalized to include `塞壬唱片-MSR` first. They are used only
 when Monster Siren's album or song artist data is empty. PRTS release dates
