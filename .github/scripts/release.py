@@ -12,9 +12,7 @@ from pathlib import Path
 
 SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 INIT_VERSION_PATTERN = re.compile(r'(?m)^__version__ = "(?P<version>[^"]+)"$')
-MACOS_ASSET_PATTERN = re.compile(
-    r"^msr-dl-v(?P<version>\d+\.\d+\.\d+)-macos-(?P<arch>arm64|x64)\.tar\.gz$"
-)
+SDIST_ASSET_PATTERN = re.compile(r"^msr_dl-(?P<version>\d+\.\d+\.\d+)\.tar\.gz$")
 
 
 def parse_version(value: str) -> tuple[int, int, int]:
@@ -152,48 +150,43 @@ def render_homebrew_formula(
     version: str, repository: str, asset_directory: Path
 ) -> str:
     parse_version(version)
-    assets: dict[str, tuple[str, str]] = {}
+    source_distribution: Path | None = None
     for path in asset_directory.iterdir():
-        match = MACOS_ASSET_PATTERN.fullmatch(path.name)
+        match = SDIST_ASSET_PATTERN.fullmatch(path.name)
         if match is None:
             continue
         if match.group("version") != version:
-            raise ValueError(f"unexpected macOS asset version: {path.name}")
-        arch = match.group("arch")
-        if arch in assets:
-            raise ValueError(f"duplicate macOS asset architecture: {arch}")
-        url = (
-            f"https://github.com/{repository}/releases/download/v{version}/{path.name}"
-        )
-        assets[arch] = (url, file_sha256(path))
+            raise ValueError(f"unexpected source distribution version: {path.name}")
+        if source_distribution is not None:
+            raise ValueError("multiple source distributions found")
+        source_distribution = path
 
-    expected = {"arm64", "x64"}
-    if assets.keys() != expected:
-        missing = ", ".join(sorted(expected - assets.keys()))
-        raise ValueError(f"missing macOS release assets: {missing}")
+    if source_distribution is None:
+        raise ValueError(f"missing source distribution for version {version}")
 
-    arm_url, arm_sha256 = assets["arm64"]
-    intel_url, intel_sha256 = assets["x64"]
+    source_url = (
+        f"https://github.com/{repository}/releases/download/v{version}/"
+        f"{source_distribution.name}"
+    )
+    source_sha256 = file_sha256(source_distribution)
     return f'''class MsrDl < Formula
+  include Language::Python::Virtualenv
+
   desc "Download Monster Siren albums with metadata and synchronized lyrics"
   homepage "https://github.com/{repository}"
+  url "{source_url}"
   version "{version}"
-
-  on_arm do
-    url "{arm_url}"
-    sha256 "{arm_sha256}"
-  end
-
-  on_intel do
-    url "{intel_url}"
-    sha256 "{intel_sha256}"
-  end
+  sha256 "{source_sha256}"
 
   depends_on "ffmpeg"
   depends_on :macos
+  depends_on "pillow" => :no_linkage
+  depends_on "python@3.13"
+
+  pypi_packages exclude_packages: "pillow"
 
   def install
-    bin.install "msr-dl"
+    virtualenv_install_with_resources
   end
 
   test do

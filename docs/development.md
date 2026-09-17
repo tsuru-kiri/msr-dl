@@ -41,10 +41,14 @@ wheel, source distribution, and PyInstaller executables for Linux, Windows,
 and both Apple Silicon and Intel macOS. Executable archive names record the
 runner architecture. FFmpeg remains an external runtime dependency.
 
-After publishing the GitHub release, the workflow calculates the macOS archive
-checksums and updates `Formula/msr-dl.rb` in `tsuru-kiri/homebrew-tap`. The
-`HOMEBREW_TAP_DEPLOY_KEY` Actions secret must contain a private deploy key whose
-public key has write access to that tap repository.
+After publishing the GitHub release, the workflow updates `Formula/msr-dl.rb`
+in `tsuru-kiri/homebrew-tap` to install the source distribution into an
+isolated Homebrew virtual environment backed by `python@3.13`. Python resources
+are resolved and checksummed with `brew update-python-resources`; Pillow is
+provided by its Homebrew formula. The generated formula is installed and tested
+before it is committed. The `HOMEBREW_TAP_DEPLOY_KEY` Actions secret must
+contain a private deploy key whose public key has write access to that tap
+repository.
 
 The same release is published to `ghcr.io/<owner>/<repository>` for
 `linux/amd64` and `linux/arm64`, with `v1.2.3`, `1.2.3`, and `latest` tags.

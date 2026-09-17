@@ -83,30 +83,41 @@ class ReleaseTests(unittest.TestCase):
         )
         self.assertIn("`abcdef0`", rendered)
 
-    def test_render_homebrew_formula_uses_macos_assets(self) -> None:
+    def test_render_homebrew_formula_uses_python_source_distribution(self) -> None:
         with TemporaryDirectory() as directory:
             assets = Path(directory)
-            arm = assets / "msr-dl-v1.2.3-macos-arm64.tar.gz"
-            intel = assets / "msr-dl-v1.2.3-macos-x64.tar.gz"
-            arm.write_bytes(b"arm binary")
-            intel.write_bytes(b"intel binary")
+            sdist = assets / "msr_dl-1.2.3.tar.gz"
+            sdist.write_bytes(b"python source distribution")
 
             rendered = release.render_homebrew_formula("1.2.3", "owner/msr-dl", assets)
 
             self.assertIn('version "1.2.3"', rendered)
-            self.assertIn("on_arm do", rendered)
-            self.assertIn("on_intel do", rendered)
-            self.assertIn(arm.name, rendered)
-            self.assertIn(intel.name, rendered)
-            self.assertIn(hashlib.sha256(b"arm binary").hexdigest(), rendered)
-            self.assertIn(hashlib.sha256(b"intel binary").hexdigest(), rendered)
+            self.assertIn("include Language::Python::Virtualenv", rendered)
+            self.assertIn(sdist.name, rendered)
+            self.assertIn(
+                hashlib.sha256(b"python source distribution").hexdigest(), rendered
+            )
+            self.assertIn('depends_on "python@3.13"', rendered)
+            self.assertIn('depends_on "pillow" => :no_linkage', rendered)
+            self.assertIn('pypi_packages exclude_packages: "pillow"', rendered)
+            self.assertIn("virtualenv_install_with_resources", rendered)
+            self.assertNotIn("on_arm do", rendered)
+            self.assertNotIn("on_intel do", rendered)
 
-    def test_render_homebrew_formula_requires_both_architectures(self) -> None:
+    def test_render_homebrew_formula_requires_source_distribution(self) -> None:
         with TemporaryDirectory() as directory:
             assets = Path(directory)
             (assets / "msr-dl-v1.2.3-macos-arm64.tar.gz").write_bytes(b"arm")
 
-            with self.assertRaisesRegex(ValueError, "x64"):
+            with self.assertRaisesRegex(ValueError, "source distribution"):
+                release.render_homebrew_formula("1.2.3", "owner/msr-dl", assets)
+
+    def test_render_homebrew_formula_rejects_wrong_sdist_version(self) -> None:
+        with TemporaryDirectory() as directory:
+            assets = Path(directory)
+            (assets / "msr_dl-1.2.2.tar.gz").write_bytes(b"old")
+
+            with self.assertRaisesRegex(ValueError, "unexpected.*version"):
                 release.render_homebrew_formula("1.2.3", "owner/msr-dl", assets)
 
 

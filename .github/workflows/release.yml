@@ -314,7 +314,7 @@ jobs:
     needs:
       - prepare
       - publish
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     permissions:
       contents: read
     steps:
@@ -331,12 +331,17 @@ jobs:
           ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           path: homebrew-tap
 
-      - name: Download macOS executables
+      - name: Register Homebrew tap
+        run: |
+          tap_root="$(brew --repository)/Library/Taps/tsuru-kiri"
+          mkdir -p "$tap_root"
+          ln -s "$GITHUB_WORKSPACE/homebrew-tap" "$tap_root/homebrew-tap"
+
+      - name: Download Python package
         uses: actions/download-artifact@v8
         with:
-          pattern: executable-macos-*
+          name: python-package
           path: release-assets
-          merge-multiple: true
 
       - name: Update formula
         env:
@@ -347,6 +352,14 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --assets release-assets \
             --output homebrew-tap/Formula/msr-dl.rb
+          brew update-python-resources tsuru-kiri/tap/msr-dl
+
+      - name: Test formula
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          brew install tsuru-kiri/tap/msr-dl
+          brew test tsuru-kiri/tap/msr-dl
 
       - name: Commit formula
         env:
