@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import tomllib
@@ -11,6 +12,9 @@ from pathlib import Path
 
 SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 INIT_VERSION_PATTERN = re.compile(r'(?m)^__version__ = "(?P<version>[^"]+)"$')
+MACOS_ASSET_PATTERN = re.compile(
+    r"^msr-dl-v(?P<version>\d+\.\d+\.\d+)-macos-(?P<arch>arm64|x64)\.tar\.gz$"
+)
 
 
 def parse_version(value: str) -> tuple[int, int, int]:
@@ -136,6 +140,79 @@ def write_changelog(
     )
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def render_homebrew_formula(
+    version: str, repository: str, asset_directory: Path
+) -> str:
+    parse_version(version)
+    assets: dict[str, tuple[str, str]] = {}
+    for path in asset_directory.iterdir():
+        match = MACOS_ASSET_PATTERN.fullmatch(path.name)
+        if match is None:
+            continue
+        if match.group("version") != version:
+            raise ValueError(f"unexpected macOS asset version: {path.name}")
+        arch = match.group("arch")
+        if arch in assets:
+            raise ValueError(f"duplicate macOS asset architecture: {arch}")
+        url = (
+            f"https://github.com/{repository}/releases/download/v{version}/{path.name}"
+        )
+        assets[arch] = (url, file_sha256(path))
+
+    expected = {"arm64", "x64"}
+    if assets.keys() != expected:
+        missing = ", ".join(sorted(expected - assets.keys()))
+        raise ValueError(f"missing macOS release assets: {missing}")
+
+    arm_url, arm_sha256 = assets["arm64"]
+    intel_url, intel_sha256 = assets["x64"]
+    return f'''class MsrDl < Formula
+  desc "Download Monster Siren albums with metadata and synchronized lyrics"
+  homepage "https://github.com/{repository}"
+  version "{version}"
+
+  on_arm do
+    url "{arm_url}"
+    sha256 "{arm_sha256}"
+  end
+
+  on_intel do
+    url "{intel_url}"
+    sha256 "{intel_sha256}"
+  end
+
+  depends_on "ffmpeg"
+  depends_on :macos
+
+  def install
+    bin.install "msr-dl"
+  end
+
+  test do
+    assert_match "msr-dl #{{version}}", shell_output("#{{bin}}/msr-dl --version")
+  end
+end
+'''
+
+
+def write_homebrew_formula(
+    version: str, repository: str, asset_directory: Path, output: Path
+) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        render_homebrew_formula(version, repository, asset_directory),
+        encoding="utf-8",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -151,6 +228,12 @@ def build_parser() -> argparse.ArgumentParser:
     changelog.add_argument("--head", required=True)
     changelog.add_argument("--repository", required=True)
     changelog.add_argument("--output", type=Path, required=True)
+
+    formula = commands.add_parser("homebrew-formula")
+    formula.add_argument("--version", required=True)
+    formula.add_argument("--repository", required=True)
+    formula.add_argument("--assets", type=Path, required=True)
+    formula.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -161,8 +244,10 @@ def main() -> None:
         validate_new_version(project_root, args.version)
     elif args.command == "sync-package-version":
         sync_package_version(project_root, args.version)
-    else:
+    elif args.command == "changelog":
         write_changelog(project_root, args.head, args.repository, args.output)
+    else:
+        write_homebrew_formula(args.version, args.repository, args.assets, args.output)
 
 
 if __name__ == "__main__":

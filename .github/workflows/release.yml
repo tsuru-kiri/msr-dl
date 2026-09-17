@@ -160,6 +160,8 @@ jobs:
             target: linux
           - runner: macos-latest
             target: macos
+          - runner: macos-15-intel
+            target: macos
           - runner: windows-latest
             target: windows
     runs-on: ${{ matrix.runner }}
@@ -306,3 +308,57 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  homebrew:
+    name: Update Homebrew formula
+    needs:
+      - prepare
+      - publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
+          path: msr-dl
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v7
+        with:
+          repository: tsuru-kiri/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: homebrew-tap
+
+      - name: Download macOS executables
+        uses: actions/download-artifact@v8
+        with:
+          pattern: executable-macos-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Update formula
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python msr-dl/.github/scripts/release.py homebrew-formula \
+            --version "$VERSION" \
+            --repository "$GITHUB_REPOSITORY" \
+            --assets release-assets \
+            --output homebrew-tap/Formula/msr-dl.rb
+
+      - name: Commit formula
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        working-directory: homebrew-tap
+        run: |
+          if git diff --quiet -- Formula/msr-dl.rb; then
+            echo "Formula is already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- Formula/msr-dl.rb
+          git commit -m "msr-dl v$VERSION"
+          git push origin HEAD:main

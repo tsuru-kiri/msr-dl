@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 import unittest
@@ -81,6 +82,32 @@ class ReleaseTests(unittest.TestCase):
             "https://github.com/owner/repository/commit/abcdef0123456789", rendered
         )
         self.assertIn("`abcdef0`", rendered)
+
+    def test_render_homebrew_formula_uses_macos_assets(self) -> None:
+        with TemporaryDirectory() as directory:
+            assets = Path(directory)
+            arm = assets / "msr-dl-v1.2.3-macos-arm64.tar.gz"
+            intel = assets / "msr-dl-v1.2.3-macos-x64.tar.gz"
+            arm.write_bytes(b"arm binary")
+            intel.write_bytes(b"intel binary")
+
+            rendered = release.render_homebrew_formula("1.2.3", "owner/msr-dl", assets)
+
+            self.assertIn('version "1.2.3"', rendered)
+            self.assertIn("on_arm do", rendered)
+            self.assertIn("on_intel do", rendered)
+            self.assertIn(arm.name, rendered)
+            self.assertIn(intel.name, rendered)
+            self.assertIn(hashlib.sha256(b"arm binary").hexdigest(), rendered)
+            self.assertIn(hashlib.sha256(b"intel binary").hexdigest(), rendered)
+
+    def test_render_homebrew_formula_requires_both_architectures(self) -> None:
+        with TemporaryDirectory() as directory:
+            assets = Path(directory)
+            (assets / "msr-dl-v1.2.3-macos-arm64.tar.gz").write_bytes(b"arm")
+
+            with self.assertRaisesRegex(ValueError, "x64"):
+                release.render_homebrew_formula("1.2.3", "owner/msr-dl", assets)
 
 
 if __name__ == "__main__":

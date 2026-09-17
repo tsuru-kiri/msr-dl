@@ -15,7 +15,14 @@ cover art, metadata, and synchronized lyrics.
 
 ## Quick start
 
-Python 3.11–3.13 and FFmpeg available on `PATH` are required.
+On macOS, install the Homebrew formula:
+
+```bash
+brew install tsuru-kiri/tap/msr-dl
+```
+
+To run from source instead, Python 3.11–3.13 and FFmpeg available on `PATH`
+are required.
 
 ```bash
 python -m pip install -e .

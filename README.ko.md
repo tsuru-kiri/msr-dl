@@ -15,7 +15,14 @@ Monster Siren Records 음원을 앨범 아트, 메타데이터, 싱크 가사와
 
 ## 빠른 시작
 
-Python 3.11–3.13과 `PATH`에서 실행 가능한 FFmpeg가 필요합니다.
+macOS에서는 Homebrew formula로 설치할 수 있습니다.
+
+```bash
+brew install tsuru-kiri/tap/msr-dl
+```
+
+소스에서 직접 실행하려면 Python 3.11–3.13과 `PATH`에서 실행 가능한
+FFmpeg가 필요합니다.
 
 ```bash
 python -m pip install -e .

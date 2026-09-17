@@ -37,9 +37,14 @@ annotated `v1.2.3` tag.
 
 After the source checks pass, the workflow publishes a GitHub Release whose
 notes list commit messages since the previous release. Its assets include the
-wheel, source distribution, and PyInstaller executables built on the default
-Linux, macOS, and Windows hosted runners. Executable archive names record the
+wheel, source distribution, and PyInstaller executables for Linux, Windows,
+and both Apple Silicon and Intel macOS. Executable archive names record the
 runner architecture. FFmpeg remains an external runtime dependency.
+
+After publishing the GitHub release, the workflow calculates the macOS archive
+checksums and updates `Formula/msr-dl.rb` in `tsuru-kiri/homebrew-tap`. The
+`HOMEBREW_TAP_DEPLOY_KEY` Actions secret must contain a private deploy key whose
+public key has write access to that tap repository.
 
 The same release is published to `ghcr.io/<owner>/<repository>` for
 `linux/amd64` and `linux/arm64`, with `v1.2.3`, `1.2.3`, and `latest` tags.
