@@ -22,7 +22,26 @@ annotated `v1.2.3` tag.
 
 After the source checks pass, the workflow publishes a GitHub Release whose
 notes list commit messages since the previous release. Its assets include the
-wheel and source distribution. FFmpeg remains an external runtime dependency.
+wheel, source distribution, `install.ps1` Windows installer, and POSIX
+`install.sh`. The Windows installer uses the release wheel with
+`uv tool install` and installs its private FFmpeg at
+`%LOCALAPPDATA%\msr-dl\ffmpeg` when FFmpeg is not already on `PATH`.
+
+The POSIX installer supports Intel and Apple Silicon macOS plus glibc Linux on
+x86_64 and ARM64. It rejects 32-bit, musl, and other platforms before making
+changes. Its private FFmpeg lives at
+`~/Library/Application Support/msr-dl/ffmpeg` on macOS or
+`${XDG_DATA_HOME:-$HOME/.local/share}/msr-dl/ffmpeg` on Linux. macOS stable
+release ZIPs and their SHA-256 sidecars come from Martin Riedl's build server;
+Linux GPL static archives and `checksums.sha256` come from BtbN FFmpeg Builds.
+The release wheel is selected from GitHub's latest-release API and checked
+against the asset's SHA-256 digest before `uv tool install` runs.
+
+After publication, the workflow runs each installer twice: Windows on its
+native runner and POSIX on x86_64/ARM64 Linux and Intel/Apple Silicon macOS.
+This verifies architecture-specific downloads, checksums, version reporting,
+the private FFmpeg, and the no-op update path. CI parses `install.ps1` with
+Windows PowerShell 5.1 and checks `install.sh` with `sh -n` and ShellCheck.
 
 After publishing the GitHub release, the workflow updates `Formula/msr-dl.rb`
 in `tsuru-kiri/homebrew-tap` to install the source distribution into an

@@ -130,7 +130,10 @@ jobs:
           enable-cache: true
 
       - name: Build wheel and source distribution
-        run: uv build --out-dir release-assets
+        run: |
+          uv build --out-dir release-assets
+          cp install.ps1 release-assets/install.ps1
+          cp install.sh release-assets/install.sh
 
       - name: Smoke-test wheel
         env:
@@ -179,6 +182,87 @@ jobs:
             --title "$TAG" \
             --notes-file release-assets/release-notes.md \
             --verify-tag
+
+  windows-installer:
+    name: Verify Windows installer
+    needs:
+      - prepare
+      - publish
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install and verify twice
+        shell: powershell
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $existingFfmpeg = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+          if ($null -ne $existingFfmpeg) {
+            $ffmpegDirectory = Split-Path -Parent $existingFfmpeg.Source
+            $env:Path = (@($env:Path -split ';') | Where-Object {
+              $_.TrimEnd('\') -ine $ffmpegDirectory.TrimEnd('\')
+            }) -join ';'
+          }
+
+          irm https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/install.ps1 | iex
+          irm https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/install.ps1 | iex
+
+          $uv = (Get-Command uv.exe).Source
+          $toolBin = (& $uv tool dir --bin).Trim()
+          $actual = & (Join-Path $toolBin "msr-dl.exe") --version
+          if ($actual -ne "msr-dl $env:VERSION") {
+            throw "Unexpected msr-dl version: $actual"
+          }
+
+          $ffmpeg = Join-Path $env:LOCALAPPDATA "msr-dl\ffmpeg\bin\ffmpeg.exe"
+          if (-not (Test-Path -LiteralPath $ffmpeg -PathType Leaf)) {
+            throw "Managed FFmpeg was not installed."
+          }
+          & $ffmpeg -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Managed FFmpeg verification failed."
+          }
+
+  posix-installer:
+    name: Verify installer (${{ matrix.runner }})
+    needs:
+      - prepare
+      - publish
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-15-intel
+          - macos-15
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Install and verify twice
+        env:
+          MSR_DL_INSTALL_FORCE_FFMPEG: "1"
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          curl -LsSf "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" | sh
+
+          case "$(uname -s)" in
+            Darwin) ffmpeg="$HOME/Library/Application Support/msr-dl/ffmpeg/bin/ffmpeg" ;;
+            Linux) ffmpeg="${XDG_DATA_HOME:-$HOME/.local/share}/msr-dl/ffmpeg/bin/ffmpeg" ;;
+          esac
+          test -x "$ffmpeg"
+          first_modified=$(stat -f %m "$ffmpeg" 2>/dev/null || stat -c %Y "$ffmpeg")
+
+          sleep 1
+          curl -LsSf "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" | sh
+
+          uv_bin=$(command -v uv || printf '%s' "$HOME/.local/bin/uv")
+          tool_bin=$("$uv_bin" tool dir --bin)
+          test "$("$tool_bin/msr-dl" --version)" = "msr-dl $VERSION"
+          test "$(stat -f %m "$ffmpeg" 2>/dev/null || stat -c %Y "$ffmpeg")" = "$first_modified"
+          "$ffmpeg" -version | sed -n '1p'
 
   container:
     name: Publish container image

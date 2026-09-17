@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import sys
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -21,9 +23,39 @@ FFMPEG_TIMEOUT = 10 * 60
 _SOURCE_DATE = re.compile(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$")
 
 
-def ensure_ffmpeg() -> None:
-    if which("ffmpeg") is None:
-        raise RuntimeError("FFmpeg is required but was not found on PATH")
+def ensure_ffmpeg() -> str:
+    executable = which("ffmpeg")
+    if executable is not None:
+        return executable
+
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            bundled = Path(local_app_data) / "msr-dl" / "ffmpeg" / "bin" / "ffmpeg.exe"
+            if bundled.is_file():
+                return str(bundled)
+    elif sys.platform == "darwin":
+        bundled = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "msr-dl"
+            / "ffmpeg"
+            / "bin"
+            / "ffmpeg"
+        )
+        if bundled.is_file():
+            return str(bundled)
+    elif sys.platform.startswith("linux"):
+        data_home = os.environ.get("XDG_DATA_HOME")
+        data_root = Path(data_home) if data_home else Path.home() / ".local" / "share"
+        bundled = data_root / "msr-dl" / "ffmpeg" / "bin" / "ffmpeg"
+        if bundled.is_file():
+            return str(bundled)
+
+    raise RuntimeError(
+        "FFmpeg is required but was not found on PATH or in the msr-dl installation"
+    )
 
 
 def convert_wav_to_flac(wav_path: Path) -> Path:
@@ -40,7 +72,7 @@ def convert_wav_to_flac(wav_path: Path) -> Path:
             partial = Path(temp.name)
         subprocess.run(
             [
-                "ffmpeg",
+                ensure_ffmpeg(),
                 "-nostdin",
                 "-v",
                 "error",
@@ -83,7 +115,7 @@ def validate_audio(path: Path) -> None:
         raise ValueError(f"Expected {expected} audio, found {actual}")
     subprocess.run(
         [
-            "ffmpeg",
+            ensure_ffmpeg(),
             "-nostdin",
             "-v",
             "error",

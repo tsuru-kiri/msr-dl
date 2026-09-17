@@ -15,7 +15,28 @@ cover art, metadata, and synchronized lyrics.
 
 ## Quick start
 
-On macOS, install the Homebrew formula:
+On macOS or Linux, run the installer below. Run the same command again to
+update when a newer release is available.
+
+```sh
+curl -LsSf https://github.com/tsuru-kiri/msr-dl/releases/latest/download/install.sh | sh
+```
+
+It supports Intel and Apple Silicon macOS and 64-bit glibc Linux on x86_64 or
+ARM64. It installs `uv`, msr-dl, and, when needed, a private FFmpeg without
+administrator privileges.
+
+On Windows, open PowerShell and run the installer. The same command installs
+updates when a newer release is available.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://github.com/tsuru-kiri/msr-dl/releases/latest/download/install.ps1 | iex"
+```
+
+The installer sets up `uv`, msr-dl, and a private FFmpeg installation without
+requiring administrator privileges.
+
+Homebrew remains an alternative on macOS:
 
 ```bash
 brew install tsuru-kiri/tap/msr-dl

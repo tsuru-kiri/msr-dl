@@ -15,7 +15,26 @@ Monster Siren Records 음원을 앨범 아트, 메타데이터, 싱크 가사와
 
 ## 빠른 시작
 
-macOS에서는 Homebrew formula로 설치할 수 있습니다.
+macOS 또는 Linux에서는 다음 설치 명령을 실행합니다. 새 릴리스가 있을 때
+같은 명령을 다시 실행하면 업데이트됩니다.
+
+```sh
+curl -LsSf https://github.com/tsuru-kiri/msr-dl/releases/latest/download/install.sh | sh
+```
+
+Intel·Apple Silicon macOS와 x86_64·ARM64 64비트 glibc Linux를 지원합니다.
+관리자 권한 없이 `uv`, msr-dl과 필요한 경우 전용 FFmpeg를 설치합니다.
+
+Windows에서는 PowerShell을 열고 다음 설치 명령을 실행합니다. 새 릴리스가
+있을 때 같은 명령을 다시 실행하면 업데이트됩니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -c "irm https://github.com/tsuru-kiri/msr-dl/releases/latest/download/install.ps1 | iex"
+```
+
+관리자 권한 없이 `uv`, msr-dl과 전용 FFmpeg를 설치합니다.
+
+macOS에서는 Homebrew formula를 대안으로 사용할 수 있습니다.
 
 ```bash
 brew install tsuru-kiri/tap/msr-dl

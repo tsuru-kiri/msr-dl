@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest.mock import patch
 
 from mutagen.easyid3 import EasyID3
 from mutagen.flac import FLAC
@@ -14,6 +15,8 @@ from PIL import Image
 from monster_siren.audio import (
     apply_prts_metadata,
     convert_wav_to_flac,
+    ensure_ffmpeg,
+    validate_audio,
     write_metadata,
 )
 
@@ -172,6 +175,115 @@ class AudioMetadataTests(unittest.TestCase):
             self.assertEqual(updated["album"], ["New Album"])
             self.assertEqual(updated["title"], ["New Song"])
             self.assertEqual(updated["tracknumber"], ["2"])
+
+    def test_ffmpeg_on_path_takes_precedence(self) -> None:
+        with (
+            patch("monster_siren.audio.which", return_value=r"C:\tools\ffmpeg.exe"),
+            patch("monster_siren.audio.sys.platform", "win32"),
+        ):
+            self.assertEqual(ensure_ffmpeg(), r"C:\tools\ffmpeg.exe")
+
+    def test_windows_uses_managed_ffmpeg_when_path_lookup_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "msr-dl" / "ffmpeg" / "bin" / "ffmpeg.exe"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+
+            with (
+                patch("monster_siren.audio.which", return_value=None),
+                patch("monster_siren.audio.sys.platform", "win32"),
+                patch.dict("os.environ", {"LOCALAPPDATA": directory}),
+            ):
+                self.assertEqual(ensure_ffmpeg(), str(executable))
+
+    def test_macos_uses_managed_ffmpeg(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = (
+                Path(directory)
+                / "Library"
+                / "Application Support"
+                / "msr-dl"
+                / "ffmpeg"
+                / "bin"
+                / "ffmpeg"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+
+            with (
+                patch("monster_siren.audio.which", return_value=None),
+                patch("monster_siren.audio.sys.platform", "darwin"),
+                patch("monster_siren.audio.Path.home", return_value=Path(directory)),
+            ):
+                self.assertEqual(ensure_ffmpeg(), str(executable))
+
+    def test_linux_uses_default_managed_ffmpeg(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = (
+                Path(directory)
+                / ".local"
+                / "share"
+                / "msr-dl"
+                / "ffmpeg"
+                / "bin"
+                / "ffmpeg"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+
+            with (
+                patch("monster_siren.audio.which", return_value=None),
+                patch("monster_siren.audio.sys.platform", "linux"),
+                patch("monster_siren.audio.Path.home", return_value=Path(directory)),
+                patch.dict("os.environ", {}, clear=True),
+            ):
+                self.assertEqual(ensure_ffmpeg(), str(executable))
+
+    def test_linux_honors_xdg_data_home(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "msr-dl" / "ffmpeg" / "bin" / "ffmpeg"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+
+            with (
+                patch("monster_siren.audio.which", return_value=None),
+                patch("monster_siren.audio.sys.platform", "linux"),
+                patch.dict("os.environ", {"XDG_DATA_HOME": directory}, clear=True),
+            ):
+                self.assertEqual(ensure_ffmpeg(), str(executable))
+
+    def test_unsupported_platform_rejects_managed_ffmpeg(self) -> None:
+        with (
+            patch("monster_siren.audio.which", return_value=None),
+            patch("monster_siren.audio.sys.platform", "freebsd13"),
+            self.assertRaisesRegex(RuntimeError, "FFmpeg is required"),
+        ):
+            ensure_ffmpeg()
+
+    def test_conversion_uses_resolved_ffmpeg_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            wav = Path(directory) / "audio.wav"
+            wav.touch()
+            with (
+                patch(
+                    "monster_siren.audio.ensure_ffmpeg", return_value="managed-ffmpeg"
+                ),
+                patch("monster_siren.audio.subprocess.run") as run,
+                patch("monster_siren.audio.FLAC"),
+            ):
+                convert_wav_to_flac(wav)
+
+            self.assertEqual(run.call_args.args[0][0], "managed-ffmpeg")
+
+    def test_validation_uses_resolved_ffmpeg_executable(self) -> None:
+        with (
+            patch("monster_siren.audio.ensure_ffmpeg", return_value="managed-ffmpeg"),
+            patch("monster_siren.audio.detect_audio_type", return_value="mp3"),
+            patch("monster_siren.audio.subprocess.run") as run,
+        ):
+            validate_audio(Path("audio.mp3"))
+
+        self.assertEqual(run.call_args.args[0][0], "managed-ffmpeg")
 
     def test_prts_only_update_preserves_mp3_tags_and_cover(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
