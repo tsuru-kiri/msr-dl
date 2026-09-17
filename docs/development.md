@@ -12,21 +12,6 @@ uv run ruff format --check .
 Run the relevant test file while working on a focused area. Before handing off
 a change, run the full test suite and both Ruff checks.
 
-## Building a standalone executable
-
-Build a single-file executable for the current operating system:
-
-```bash
-uv sync --extra build
-uv run pyinstaller --clean --noconfirm msr-dl.spec
-./dist/msr-dl --version
-```
-
-The result is written to `dist/msr-dl`, or `dist/msr-dl.exe` on Windows.
-PyInstaller output is specific to the operating system and CPU architecture on
-which it is built, so build separately for each target. The bundled PRTS JSON
-snapshot and aliases are included, but FFmpeg is not.
-
 ## Publishing a release
 
 Run the **Release** workflow from the GitHub Actions page on the `main` branch
@@ -37,9 +22,7 @@ annotated `v1.2.3` tag.
 
 After the source checks pass, the workflow publishes a GitHub Release whose
 notes list commit messages since the previous release. Its assets include the
-wheel, source distribution, and PyInstaller executables for Linux, Windows,
-and both Apple Silicon and Intel macOS. Executable archive names record the
-runner architecture. FFmpeg remains an external runtime dependency.
+wheel and source distribution. FFmpeg remains an external runtime dependency.
 
 After publishing the GitHub release, the workflow updates `Formula/msr-dl.rb`
 in `tsuru-kiri/homebrew-tap` to install the source distribution into an

@@ -147,82 +147,11 @@ jobs:
           path: release-assets/*
           if-no-files-found: error
 
-  executable:
-    name: Build executable (${{ matrix.target }})
-    needs: prepare
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            target: linux
-          - runner: macos-latest
-            target: macos
-          - runner: macos-15-intel
-            target: macos
-          - runner: windows-latest
-            target: windows
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Check out release commit
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.prepare.outputs.release_sha }}
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          python-version: "3.13"
-          enable-cache: true
-
-      - name: Install build dependencies
-        run: uv sync --locked --extra build
-
-      - name: Build executable
-        run: uv run pyinstaller --clean --noconfirm msr-dl.spec
-
-      - name: Verify and package executable
-        if: runner.os != 'Windows'
-        env:
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          test "$(./dist/msr-dl --version)" = "msr-dl $VERSION"
-          mkdir -p release-assets
-          arch="$(printf '%s' "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
-          tar -C dist -czf "release-assets/msr-dl-v$VERSION-$TARGET-$arch.tar.gz" msr-dl
-
-      - name: Verify and package Windows executable
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          $actual = & .\dist\msr-dl.exe --version
-          if ($actual -ne "msr-dl $env:VERSION") {
-            throw "Unexpected executable version: $actual"
-          }
-          New-Item -ItemType Directory -Force release-assets | Out-Null
-          $arch = $env:RUNNER_ARCH.ToLowerInvariant()
-          $archive = "release-assets/msr-dl-v$env:VERSION-$env:TARGET-$arch.zip"
-          Compress-Archive -Path .\dist\msr-dl.exe -DestinationPath $archive
-
-      - name: Upload executable
-        uses: actions/upload-artifact@v7
-        with:
-          name: executable-${{ matrix.target }}-${{ runner.arch }}
-          path: release-assets/*
-          if-no-files-found: error
-
   publish:
     name: Publish GitHub release
     needs:
       - prepare
       - package
-      - executable
     runs-on: ubuntu-latest
     permissions:
       contents: write
