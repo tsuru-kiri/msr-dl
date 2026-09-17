@@ -27,6 +27,29 @@ PyInstaller output is specific to the operating system and CPU architecture on
 which it is built, so build separately for each target. The bundled PRTS JSON
 snapshot and aliases are included, but FFmpeg is not.
 
+## Publishing a release
+
+Run the **Release** workflow from the GitHub Actions page on the `main` branch
+and enter the next stable SemVer without a `v` prefix, such as `1.2.3`. The
+version must be greater than the current project version. The workflow updates
+the package version, commits it as `chore: release v1.2.3`, and creates the
+annotated `v1.2.3` tag.
+
+After the source checks pass, the workflow publishes a GitHub Release whose
+notes list commit messages since the previous release. Its assets include the
+wheel, source distribution, and PyInstaller executables built on the default
+Linux, macOS, and Windows hosted runners. Executable archive names record the
+runner architecture. FFmpeg remains an external runtime dependency.
+
+The same release is published to `ghcr.io/<owner>/<repository>` for
+`linux/amd64` and `linux/arm64`, with `v1.2.3`, `1.2.3`, and `latest` tags.
+GitHub Actions needs permission to write repository contents and packages, and
+branch protection must allow the workflow to push its release commit and tag.
+
+If a job fails after the tag has been pushed, use **Re-run failed jobs** on the
+same workflow run. Do not dispatch a new run with the same version, because
+duplicate versions and tags are rejected deliberately.
+
 ## Code structure
 
 ```text
