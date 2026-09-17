@@ -189,7 +189,8 @@ jobs:
         run: |
           test "$(./dist/msr-dl --version)" = "msr-dl $VERSION"
           mkdir -p release-assets
-          tar -C dist -czf "release-assets/msr-dl-v$VERSION-$TARGET-$RUNNER_ARCH.tar.gz" msr-dl
+          arch="$(printf '%s' "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
+          tar -C dist -czf "release-assets/msr-dl-v$VERSION-$TARGET-$arch.tar.gz" msr-dl
 
       - name: Verify and package Windows executable
         if: runner.os == 'Windows'
@@ -203,7 +204,8 @@ jobs:
             throw "Unexpected executable version: $actual"
           }
           New-Item -ItemType Directory -Force release-assets | Out-Null
-          $archive = "release-assets/msr-dl-v$env:VERSION-$env:TARGET-$env:RUNNER_ARCH.zip"
+          $arch = $env:RUNNER_ARCH.ToLowerInvariant()
+          $archive = "release-assets/msr-dl-v$env:VERSION-$env:TARGET-$arch.zip"
           Compress-Archive -Path .\dist\msr-dl.exe -DestinationPath $archive
 
       - name: Upload executable
