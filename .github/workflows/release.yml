@@ -255,12 +255,18 @@ jobs:
           curl -LsSf "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" | sh
 
           case "$(uname -s)" in
-            Darwin) ffmpeg="$HOME/Library/Application Support/msr-dl/ffmpeg/bin/ffmpeg" ;;
-            Linux) ffmpeg="${XDG_DATA_HOME:-$HOME/.local/share}/msr-dl/ffmpeg/bin/ffmpeg" ;;
+            Darwin)
+              ffmpeg="$HOME/Library/Application Support/msr-dl/ffmpeg/bin/ffmpeg"
+              file_modified() { stat -f '%m' "$1"; }
+              ;;
+            Linux)
+              ffmpeg="${XDG_DATA_HOME:-$HOME/.local/share}/msr-dl/ffmpeg/bin/ffmpeg"
+              file_modified() { stat -c '%Y' "$1"; }
+              ;;
           esac
           test -x "$ffmpeg"
           test -f "$(dirname "$(dirname "$ffmpeg")")/FFMPEG-NOTICE.txt"
-          first_modified=$(stat -f %m "$ffmpeg" 2>/dev/null || stat -c %Y "$ffmpeg")
+          first_modified=$(file_modified "$ffmpeg")
 
           sleep 1
           curl -LsSf "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" | sh
@@ -268,7 +274,11 @@ jobs:
           uv_bin=$(command -v uv || printf '%s' "$HOME/.local/bin/uv")
           tool_bin=$("$uv_bin" tool dir --bin)
           test "$("$tool_bin/msr-dl" --version)" = "msr-dl $VERSION"
-          test "$(stat -f %m "$ffmpeg" 2>/dev/null || stat -c %Y "$ffmpeg")" = "$first_modified"
+          second_modified=$(file_modified "$ffmpeg")
+          if [ "$second_modified" != "$first_modified" ]; then
+            echo "Managed FFmpeg was unexpectedly replaced during the second install." >&2
+            exit 1
+          fi
           "$ffmpeg" -version | sed -n '1p'
 
   container:
