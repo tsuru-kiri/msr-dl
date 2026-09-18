@@ -223,8 +223,10 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $ffmpegRoot "FFMPEG-NOTICE.txt") -PathType Leaf)) {
             throw "Managed FFmpeg notice was not installed."
           }
-          & $ffmpeg -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) {
+          $ffmpegOutput = & $ffmpeg -version
+          $ffmpegExitCode = $LASTEXITCODE
+          $ffmpegOutput | Select-Object -First 1
+          if ($ffmpegExitCode -ne 0) {
             throw "Managed FFmpeg verification failed."
           }
 
