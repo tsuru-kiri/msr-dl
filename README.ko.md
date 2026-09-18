@@ -1,7 +1,6 @@
 # msr-dl
 
 [English](README.md)
-[Korean](README.ko.md)
 
 Monster Siren Records 음원을 앨범 아트, 메타데이터, 싱크 가사와 함께
 내려받는 명령줄 도구입니다.
@@ -14,6 +13,8 @@ Monster Siren Records 음원을 앨범 아트, 메타데이터, 싱크 가사와
 - PRTS Wiki를 보완 데이터로 사용해 발매일과 누락된 아티스트 정보 추가
 
 ## 빠른 시작
+
+### 설치
 
 macOS 또는 Linux에서는 다음 설치 명령을 실행합니다. 새 릴리스가 있을 때
 같은 명령을 다시 실행하면 업데이트됩니다.
@@ -45,9 +46,9 @@ FFmpeg가 필요합니다.
 
 ```bash
 python -m pip install -e .
-msr-dl list
-msr-dl download --album-cid 0239
 ```
+
+### 실행
 
 인자 없이 실행하면 전체 카탈로그를 `./MonsterSiren`에 내려받습니다.
 
@@ -55,11 +56,36 @@ msr-dl download --album-cid 0239
 msr-dl
 ```
 
-출력 위치나 동시 작업 수를 바꿀 수도 있습니다.
+카탈로그를 조회하거나 특정 앨범을 내려받을 수 있으며, 출력 위치와 동시
+작업 수도 지정할 수 있습니다.
 
 ```bash
+msr-dl list
+msr-dl download --album-cid 0239
 msr-dl download --output ~/Music/MonsterSiren --workers 2
 ```
+
+## 면책 안내
+
+msr-dl은 비공식 프로젝트이며 Hypergryph 또는 Monster Siren Records와
+관련이 없고, 이들로부터 승인이나 보증을 받지 않았습니다. 음원, 앨범 아트,
+가사, 상표 및 관련 자료의 권리는 각 권리자에게 있습니다.
+
+이 프로젝트에는 다운로드된 미디어가 포함되어 있지 않습니다. 사용자는 본
+도구의 이용이 관련 법률과 원본 서비스의 이용 조건을 준수하는지 직접 확인할
+책임이 있습니다. 또한 다운로드한 콘텐츠의 재배포 또는 상업적 이용과 그로
+인해 발생하는 모든 결과에 대한 책임도 전적으로 사용자에게 있습니다.
+
+## 감사의 말
+
+이 프로젝트는
+[khanhn201/monster-siren-download](https://github.com/khanhn201/monster-siren-download)에서
+영감을 받았습니다.
+
+## 라이선스
+
+msr-dl은 [MIT 라이선스](LICENSE)로 배포됩니다. 포함된 외부 저작물에 관한
+내용은 [제3자 고지](THIRD_PARTY_NOTICES)를 참고하십시오.
 
 ## 문서
 

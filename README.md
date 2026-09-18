@@ -1,6 +1,5 @@
 # msr-dl
 
-[English](README.md)
 [Korean](README.ko.md)
 
 A command-line tool for downloading Monster Siren Records music with
@@ -14,6 +13,8 @@ cover art, metadata, and synchronized lyrics.
 - Fill in release dates and missing artist credits from PRTS Wiki metadata
 
 ## Quick start
+
+### Installation
 
 On macOS or Linux, run the installer below. Run the same command again to
 update when a newer release is available.
@@ -47,9 +48,9 @@ are required.
 
 ```bash
 python -m pip install -e .
-msr-dl list
-msr-dl download --album-cid 0239
 ```
+
+### Run
 
 With no arguments, msr-dl downloads the entire catalog to `./MonsterSiren`.
 
@@ -57,11 +58,36 @@ With no arguments, msr-dl downloads the entire catalog to `./MonsterSiren`.
 msr-dl
 ```
 
-The output directory and number of concurrent album workers are configurable.
+You can also list the catalog, download a specific album, or configure the
+output directory and number of concurrent album workers.
 
 ```bash
+msr-dl list
+msr-dl download --album-cid 0239
 msr-dl download --output ~/Music/MonsterSiren --workers 2
 ```
+
+## Disclaimer
+
+msr-dl is an unofficial project and is not affiliated with or endorsed by
+Hypergryph or Monster Siren Records. All music, artwork, lyrics, trademarks,
+and related materials are the property of their respective rights holders.
+
+This project does not include downloaded media. Users are responsible for
+ensuring that their use of this tool complies with applicable laws and the
+terms of the source service. They are also solely responsible for any
+redistribution or commercial use of downloaded content and the consequences
+arising from it.
+
+## Acknowledgments
+
+This project was inspired by
+[khanhn201/monster-siren-download](https://github.com/khanhn201/monster-siren-download).
+
+## License
+
+msr-dl is available under the [MIT License](LICENSE). See
+[third-party notices](THIRD_PARTY_NOTICES) for incorporated work.
 
 ## Documentation
 

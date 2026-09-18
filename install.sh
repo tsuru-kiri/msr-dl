@@ -86,6 +86,12 @@ else
     FFMPEG_ROOT=$HOME/Library/Application\ Support/msr-dl/ffmpeg
 fi
 FFMPEG=$FFMPEG_ROOT/bin/ffmpeg
+if [ "$PLATFORM" = macos ]; then
+    FFMPEG_SOURCE_URL="https://ffmpeg.martin-riedl.de/redirect/latest/macos/$FFMPEG_ARCH/release/ffmpeg.zip"
+else
+    FFMPEG_ASSET=ffmpeg-master-latest-$FFMPEG_ARCH-gpl.tar.xz
+    FFMPEG_SOURCE_URL=$BTBN_RELEASE_URL/$FFMPEG_ASSET
+fi
 
 have curl || fail "curl is required."
 if [ "$PLATFORM" = macos ]; then
@@ -125,13 +131,12 @@ else
     mkdir "$FFMPEG_EXTRACT"
 
     if [ "$PLATFORM" = macos ]; then
-        FFMPEG_URL="https://ffmpeg.martin-riedl.de/redirect/latest/macos/$FFMPEG_ARCH/release/ffmpeg.zip"
-        EFFECTIVE_URL=$(curl -LsSf -w '%{url_effective}' -o "$FFMPEG_ARCHIVE" "$FFMPEG_URL")
+        EFFECTIVE_URL=$(curl -LsSf -w '%{url_effective}' -o "$FFMPEG_ARCHIVE" "$FFMPEG_SOURCE_URL")
+        FFMPEG_SOURCE_URL=$EFFECTIVE_URL
         curl -LsSf -o "$FFMPEG_CHECKSUM" "$EFFECTIVE_URL.sha256"
         (cd "$FFMPEG_EXTRACT" && unzip -q "$FFMPEG_ARCHIVE")
     else
-        FFMPEG_ASSET=ffmpeg-master-latest-$FFMPEG_ARCH-gpl.tar.xz
-        curl -LsSf -o "$FFMPEG_ARCHIVE" "$BTBN_RELEASE_URL/$FFMPEG_ASSET"
+        curl -LsSf -o "$FFMPEG_ARCHIVE" "$FFMPEG_SOURCE_URL"
         curl -LsSf -o "$FFMPEG_CHECKSUM" "$BTBN_RELEASE_URL/checksums.sha256"
         tar -xJf "$FFMPEG_ARCHIVE" -C "$FFMPEG_EXTRACT" || fail "tar must support xz archives."
     fi
@@ -154,12 +159,24 @@ else
     FFMPEG_STAGING_ROOT=$FFMPEG_PARENT/.ffmpeg.$$
     mkdir -p "$FFMPEG_STAGING_ROOT/bin"
     cp "$FOUND_FFMPEG" "$FFMPEG_STAGING_ROOT/bin/ffmpeg"
+    FOUND_FFMPEG_LICENSE=$(find "$FFMPEG_EXTRACT" -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' \) | sed -n '1p')
+    if [ -n "$FOUND_FFMPEG_LICENSE" ]; then
+        cp "$FOUND_FFMPEG_LICENSE" "$FFMPEG_STAGING_ROOT/FFMPEG-LICENSE.txt"
+    fi
     chmod 755 "$FFMPEG_STAGING_ROOT/bin/ffmpeg"
     if [ -e "$FFMPEG_ROOT" ]; then
         rm -rf -- "$FFMPEG_ROOT"
     fi
     mv "$FFMPEG_STAGING_ROOT" "$FFMPEG_ROOT"
     FFMPEG_STAGING_ROOT=
+fi
+
+if [ "$FFMPEG" = "$FFMPEG_ROOT/bin/ffmpeg" ]; then
+    printf '%s\n' \
+        'FFmpeg is third-party software and is not covered by the msr-dl license.' \
+        "Binary source: $FFMPEG_SOURCE_URL" \
+        'License and source information: https://ffmpeg.org/legal.html' \
+        >"$FFMPEG_ROOT/FFMPEG-NOTICE.txt"
 fi
 
 step "Checking the latest msr-dl release"

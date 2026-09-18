@@ -219,6 +219,10 @@ jobs:
           if (-not (Test-Path -LiteralPath $ffmpeg -PathType Leaf)) {
             throw "Managed FFmpeg was not installed."
           }
+          $ffmpegRoot = Split-Path -Parent (Split-Path -Parent $ffmpeg)
+          if (-not (Test-Path -LiteralPath (Join-Path $ffmpegRoot "FFMPEG-NOTICE.txt") -PathType Leaf)) {
+            throw "Managed FFmpeg notice was not installed."
+          }
           & $ffmpeg -version | Select-Object -First 1
           if ($LASTEXITCODE -ne 0) {
             throw "Managed FFmpeg verification failed."
@@ -253,6 +257,7 @@ jobs:
             Linux) ffmpeg="${XDG_DATA_HOME:-$HOME/.local/share}/msr-dl/ffmpeg/bin/ffmpeg" ;;
           esac
           test -x "$ffmpeg"
+          test -f "$(dirname "$(dirname "$ffmpeg")")/FFMPEG-NOTICE.txt"
           first_modified=$(stat -f %m "$ffmpeg" 2>/dev/null || stat -c %Y "$ffmpeg")
 
           sleep 1

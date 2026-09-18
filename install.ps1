@@ -177,6 +177,16 @@ try {
         $ffmpeg = $managedFfmpeg
     }
 
+    if ($ffmpeg -ieq $managedFfmpeg) {
+        @(
+            "FFmpeg is third-party software and is not covered by the msr-dl license."
+            "Binary source: $FfmpegUrl"
+            "License and source information: https://ffmpeg.org/legal.html"
+        ) | Set-Content -LiteralPath (
+            Join-Path $managedFfmpegRoot "FFMPEG-NOTICE.txt"
+        ) -Encoding UTF8
+    }
+
     Write-Step "Checking the latest msr-dl release"
     $headers = @{ Accept = "application/vnd.github+json"; "User-Agent" = "msr-dl-installer" }
     $release = Invoke-RestMethod -UseBasicParsing -Headers $headers -Uri $LatestReleaseApi
