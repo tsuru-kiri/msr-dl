@@ -449,9 +449,7 @@ class DownloaderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            downloader = Downloader(
-                DownloaderConfig(root / "output", album_cid="a1")
-            )
+            downloader = Downloader(DownloaderConfig(root / "output", album_cid="a1"))
             downloader._download_album = Mock(return_value=DownloadReport(failed=1))
 
             with (
