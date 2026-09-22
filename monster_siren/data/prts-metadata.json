@@ -19,6 +19,15 @@
       "prtsTitle": "Unmask",
       "releaseDate": "2024-11-01"
     },
+    "0232": {
+      "artists": [
+        "塞壬唱片-MSR"
+      ],
+      "fingerprint": "sha256:e4e3d6e5fd72550ebe8837958a403574d595f2409e27dec7927570f6ac41f101",
+      "msrName": "逐影集趣ost",
+      "prtsTitle": "逐影集趣OST",
+      "releaseDate": "2026-09-22"
+    },
     "0233": {
       "artists": [
         "塞壬唱片-MSR"
@@ -2822,6 +2831,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-09-22T19:23:11.578835+00:00",
+  "generatedAt": "2026-09-22T19:54:00.445313+00:00",
   "version": 2
 }
