@@ -99,14 +99,7 @@ class MetadataApplier:
                     logging.warning(
                         "%d selected song(s) have not been downloaded.", report.missing
                     )
-            for index, song in enumerate(selected_downloads, start=1):
-                logging.info(
-                    "Applying metadata (%d/%d): %s / %s",
-                    index,
-                    len(selected_downloads),
-                    song.album_name,
-                    song.song_name,
-                )
+            for song in selected_downloads:
                 try:
                     album = selected_by_cid[song.album_cid]
                     detail = detail_cache.get(song.album_cid)
@@ -259,6 +252,11 @@ class MetadataApplier:
             prts.fingerprint if apply_prts and prts is not None else None,
             prts_album_artists=prts_album_artists,
             prts_song_artists=prts_song_artists,
+        )
+        logging.info(
+            "Applying metadata: %s / %s",
+            state_song.album_name,
+            state_song.song_name,
         )
 
     def _replace_with_prts(

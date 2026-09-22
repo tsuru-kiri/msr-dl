@@ -81,6 +81,7 @@ class MetadataApplyTests(unittest.TestCase):
                 patch("monster_siren.metadata_apply.ensure_ffmpeg"),
                 patch("monster_siren.metadata_apply.MonsterSirenAPI", FakeAPI),
                 patch("monster_siren.metadata_apply.apply_prts_metadata") as apply_prts,
+                self.assertNoLogs(level="INFO"),
             ):
                 report = MetadataApplier(
                     MetadataApplyConfig(root, metadata_snapshot=snapshot_path)
@@ -114,7 +115,7 @@ class MetadataApplyTests(unittest.TestCase):
                 fingerprint,
             )
 
-    def test_apply_logs_song_progress(self) -> None:
+    def test_apply_logs_song_when_metadata_is_applied(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             snapshot_path, _ = self._fixture(root)
@@ -132,7 +133,7 @@ class MetadataApplyTests(unittest.TestCase):
 
             self.assertTrue(
                 any(
-                    "Applying metadata (1/1): Album / Song" in message
+                    "Applying metadata: Album / Song" in message
                     for message in logs.output
                 )
             )
@@ -155,6 +156,7 @@ class MetadataApplyTests(unittest.TestCase):
                 patch("monster_siren.metadata_apply.MonsterSirenAPI", FakeAPI),
                 patch("monster_siren.metadata_apply.validate_audio"),
                 patch("monster_siren.metadata_apply.write_metadata") as write,
+                self.assertLogs(level="INFO") as logs,
             ):
                 report = MetadataApplier(
                     MetadataApplyConfig(
@@ -167,6 +169,12 @@ class MetadataApplyTests(unittest.TestCase):
             self.assertIsNone(write.call_args.kwargs["artists"])
             self.assertEqual(report.msr_applied, 1)
             self.assertEqual(report.prts_unchanged, 1)
+            self.assertTrue(
+                any(
+                    "Applying metadata: Album / Song" in message
+                    for message in logs.output
+                )
+            )
 
     def test_all_clears_missing_msr_artists_that_were_not_prts_fallbacks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -347,12 +355,16 @@ class MetadataApplyTests(unittest.TestCase):
                     "monster_siren.metadata_apply.apply_prts_metadata",
                     side_effect=RuntimeError("tag failure"),
                 ),
+                self.assertLogs(level="INFO") as logs,
             ):
                 report = MetadataApplier(
                     MetadataApplyConfig(root, metadata_snapshot=snapshot_path)
                 ).run()
 
             self.assertEqual(report.failed, 1)
+            self.assertFalse(
+                any("Applying metadata" in message for message in logs.output)
+            )
             self.assertEqual(audio.read_bytes(), original)
             self.assertEqual(
                 DownloadState(root / "download_state.json").song_metadata_fingerprint(
@@ -372,6 +384,7 @@ class MetadataApplyTests(unittest.TestCase):
             with (
                 patch("monster_siren.metadata_apply.ensure_ffmpeg"),
                 patch("monster_siren.metadata_apply.MonsterSirenAPI", FakeAPI),
+                self.assertNoLogs(level="INFO"),
             ):
                 report = MetadataApplier(
                     MetadataApplyConfig(root, metadata_snapshot=snapshot_path)
