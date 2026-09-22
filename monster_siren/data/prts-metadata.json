@@ -1973,6 +1973,15 @@
       "prtsTitle": "Zone 10⁻⁸",
       "releaseDate": "2019-12-11"
     },
+    "7760": {
+      "artists": [
+        "塞壬唱片-MSR"
+      ],
+      "fingerprint": "sha256:55e05334920b1282be5cff067bc0c6ca3b1c7cfa8165801668c842a7be1f8763",
+      "msrName": "月行水上",
+      "prtsTitle": "月行水上OST",
+      "releaseDate": "2026-09-06"
+    },
     "7761": {
       "artists": [
         "塞壬唱片-MSR"
@@ -2813,6 +2822,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-09-06T07:47:07.596338+00:00",
+  "generatedAt": "2026-09-22T19:23:11.578835+00:00",
   "version": 2
 }
