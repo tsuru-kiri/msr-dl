@@ -22,6 +22,10 @@ PRTS release dates replace source dates. PRTS artists are normalized with
 data is empty. Without a PRTS date, valid MP3 and FLAC dates are preserved, but
 WAV production metadata is discarded during FLAC conversion.
 
+After each `download`, completed songs in the selected target are checked
+against the selected snapshot. Songs with missing or outdated PRTS metadata are
+updated without downloading their audio again.
+
 ## Updating a snapshot
 
 Generate a snapshot from the PRTS Wiki music overview:
@@ -79,4 +83,3 @@ Metadata application keeps existing file and directory names. An explicitly
 selected album or song must have at least one completed download in the state
 file. For a partially downloaded album, only completed songs are updated and
 missing songs are reported.
-

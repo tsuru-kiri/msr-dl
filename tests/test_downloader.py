@@ -12,6 +12,8 @@ from PIL import Image
 
 from monster_siren.downloader import Downloader, DownloaderConfig, DownloadReport
 from monster_siren.metadata import DEFAULT_SNAPSHOT_PATH, AlbumMetadata
+from monster_siren.metadata_apply import MetadataApplyConfig, MetadataApplyReport
+from monster_siren.state import DownloadState
 from monster_siren.utils import album_directory_name, song_stem
 
 
@@ -305,7 +307,11 @@ class DownloaderTests(unittest.TestCase):
         downloader.config = DownloaderConfig(Path("output"), song_cid="s2")
         downloader._download_album = Mock(return_value=DownloadReport())
 
-        with patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI):
+        with (
+            patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+            patch("monster_siren.downloader.MetadataApplier") as applier,
+        ):
+            applier.return_value.run.return_value = MetadataApplyReport()
             self.assertEqual(
                 downloader.run(),
                 DownloadReport(albums=1),
@@ -331,6 +337,7 @@ class DownloaderTests(unittest.TestCase):
 
         downloader = object.__new__(Downloader)
         downloader.config = DownloaderConfig(Path("output"), workers=1)
+        downloader.metadata = Mock()
         downloader._download_album = Mock(
             side_effect=[
                 DownloadReport(songs=2, downloaded=1, skipped=1),
@@ -338,7 +345,11 @@ class DownloaderTests(unittest.TestCase):
             ]
         )
 
-        with patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI):
+        with (
+            patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+            patch("monster_siren.downloader.MetadataApplier") as applier,
+        ):
+            applier.return_value.run.return_value = MetadataApplyReport()
             report = downloader.run()
 
         self.assertEqual(
@@ -352,6 +363,204 @@ class DownloaderTests(unittest.TestCase):
                 failed_albums=1,
             ),
         )
+
+    def test_run_applies_pending_metadata_for_download_targets(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [{"cid": "a1", "name": "Album"}]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = root / "metadata.json"
+            snapshot.write_text(
+                json.dumps({"version": 1, "albums": {}}), encoding="utf-8"
+            )
+            downloader = Downloader(
+                DownloaderConfig(
+                    root / "output",
+                    album_cid="a1",
+                    metadata_snapshot=snapshot,
+                )
+            )
+            downloader._download_album = Mock(
+                return_value=DownloadReport(songs=1, downloaded=1)
+            )
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+                patch("monster_siren.downloader.MetadataApplier") as applier,
+            ):
+                applier.return_value.run.return_value = MetadataApplyReport()
+                report = downloader.run()
+
+        self.assertEqual(report, DownloadReport(albums=1, songs=1, downloaded=1))
+        applier.assert_called_once_with(
+            MetadataApplyConfig(
+                output_dir=root / "output",
+                metadata_snapshot=snapshot,
+                album_cid="a1",
+            ),
+            metadata=downloader.metadata,
+        )
+
+    def test_run_counts_pending_metadata_failures(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [{"cid": "a1", "name": "Album"}]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            downloader = Downloader(DownloaderConfig(root / "output"))
+            downloader._download_album = Mock(
+                return_value=DownloadReport(songs=1, downloaded=1)
+            )
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+                patch("monster_siren.downloader.MetadataApplier") as applier,
+            ):
+                applier.return_value.run.return_value = MetadataApplyReport(failed=1)
+                report = downloader.run()
+
+        self.assertEqual(report.failed, 1)
+
+    def test_run_skips_reconciliation_when_no_song_completed(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [{"cid": "a1", "name": "Album"}]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            downloader = Downloader(
+                DownloaderConfig(root / "output", album_cid="a1")
+            )
+            downloader._download_album = Mock(return_value=DownloadReport(failed=1))
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+                patch("monster_siren.downloader.MetadataApplier") as applier,
+            ):
+                report = downloader.run()
+
+        self.assertEqual(report.failed, 1)
+        applier.assert_not_called()
+
+    def test_run_reports_reconciliation_setup_failure(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [{"cid": "a1", "name": "Album"}]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            downloader = Downloader(DownloaderConfig(root / "output"))
+            downloader._download_album = Mock(
+                return_value=DownloadReport(songs=1, downloaded=1)
+            )
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+                patch(
+                    "monster_siren.downloader.MetadataApplier",
+                    side_effect=RuntimeError("metadata unavailable"),
+                ),
+            ):
+                report = downloader.run()
+
+        self.assertEqual(report.failed, 1)
+
+    def test_run_updates_completed_song_with_outdated_metadata(self) -> None:
+        class CatalogAPI:
+            def __enter__(self) -> CatalogAPI:
+                return self
+
+            def __exit__(self, *exc_info: object) -> None:
+                pass
+
+            def get_albums(self) -> list[dict[str, object]]:
+                return [{"cid": "a1", "name": "Album", "artistes": []}]
+
+            def get_album_detail(self, cid: str) -> dict[str, object]:
+                return {"songs": [{"cid": "s1", "name": "Song", "artistes": []}]}
+
+            def get_song_detail(self, cid: str) -> dict[str, object]:
+                return {"artists": []}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = root / "metadata.json"
+            snapshot.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "albums": {
+                            "a1": {
+                                "releaseDate": "2024-01-02",
+                                "artists": ["PRTS Artist"],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            downloader = Downloader(
+                DownloaderConfig(root / "output", metadata_snapshot=snapshot)
+            )
+            album = downloader.output_dir / "Album [a1]"
+            album.mkdir()
+            audio = album / "01 - Song [s1].flac"
+            audio.write_bytes(b"audio")
+            downloader.state.mark_song(
+                "a1",
+                "Album",
+                "s1",
+                "Song",
+                "complete",
+                output_path=audio,
+                lyrics_complete=False,
+                prts_fingerprint="sha256:old",
+            )
+            downloader._download_album = Mock(
+                return_value=DownloadReport(songs=1, skipped=1)
+            )
+
+            with (
+                patch("monster_siren.downloader.MonsterSirenAPI", CatalogAPI),
+                patch("monster_siren.metadata_apply.MonsterSirenAPI", CatalogAPI),
+                patch("monster_siren.metadata_apply.validate_audio"),
+                patch("monster_siren.metadata_apply.apply_prts_metadata") as apply_prts,
+            ):
+                report = downloader.run()
+            fingerprint = DownloadState(
+                root / "output" / "download_state.json"
+            ).song_metadata_fingerprint("a1", "s1")
+
+        self.assertEqual(report.failed, 0)
+        apply_prts.assert_called_once()
+        self.assertEqual(fingerprint, downloader.metadata.album("a1").fingerprint)
 
     def test_album_report_counts_songs_after_an_earlier_song_fails(self) -> None:
         class AlbumAPI:

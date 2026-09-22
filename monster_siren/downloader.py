@@ -19,6 +19,7 @@ from .metadata import (
     AlbumMetadata,
     load_metadata_snapshot,
 )
+from .metadata_apply import MetadataApplier, MetadataApplyConfig
 from .state import DownloadState
 from .utils import (
     album_directory_name,
@@ -102,6 +103,22 @@ class Downloader:
                     report.failed_albums += 1
                     logging.exception("Album worker failed.")
 
+        if report.downloaded or report.skipped:
+            try:
+                metadata_report = MetadataApplier(
+                    MetadataApplyConfig(
+                        output_dir=self.config.output_dir,
+                        metadata_snapshot=self.config.metadata_snapshot,
+                        album_filters=self.config.album_filters,
+                        album_cid=self.config.album_cid,
+                        song_cid=self.config.song_cid,
+                    ),
+                    metadata=self.metadata,
+                ).run()
+                report.failed += metadata_report.failed
+            except Exception:
+                report.failed += 1
+                logging.exception("Could not reconcile metadata after download.")
         return report
 
     def _filter_albums(self, albums: list[dict[str, Any]]) -> list[dict[str, Any]]:
