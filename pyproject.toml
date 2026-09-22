@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "msr-dl"
-version = "0.1.3"
+version = "0.1.4"
 description = "Download Monster Siren albums with metadata and synchronized lyrics"
 readme = "README.md"
 license = "MIT"
