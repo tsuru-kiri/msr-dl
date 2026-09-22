@@ -53,6 +53,30 @@ class PRTSTests(unittest.TestCase):
 
         self.assertEqual(fetch_music_table(session), MUSIC_TABLE)
         session.get.assert_called_once_with(PRTS_MUSIC_URL, timeout=(10.0, 120.0))
+        session.mount.assert_not_called()
+
+    def test_fetch_retries_transient_failures_with_owned_session(self) -> None:
+        response = Mock(text=MUSIC_TABLE, content=MUSIC_TABLE.encode("utf-8"))
+        response.raise_for_status = Mock()
+        session = Mock()
+        session.get.return_value = response
+
+        with patch("monster_siren.prts.requests.Session", return_value=session):
+            self.assertEqual(fetch_music_table(), MUSIC_TABLE)
+
+        session.mount.assert_called_once()
+        prefix, adapter = session.mount.call_args.args
+        self.assertEqual(prefix, "https://")
+        retry = adapter.max_retries
+        self.assertEqual(retry.total, 4)
+        self.assertEqual(retry.connect, 4)
+        self.assertEqual(retry.read, 4)
+        self.assertEqual(retry.status, 4)
+        self.assertEqual(retry.backoff_factor, 0.8)
+        self.assertEqual(retry.status_forcelist, (429, 500, 502, 503, 504))
+        self.assertEqual(retry.allowed_methods, frozenset({"GET"}))
+        self.assertTrue(retry.respect_retry_after_header)
+        session.close.assert_called_once()
 
     def test_rowspans_are_expanded_and_duplicate_editions_are_merged(self) -> None:
         releases = parse_music_table(MUSIC_TABLE)
