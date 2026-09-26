@@ -324,6 +324,15 @@
       "prtsTitle": "矢量突破OST",
       "releaseDate": "2024-09-28"
     },
+    "1014": {
+      "artists": [
+        "塞壬唱片-MSR"
+      ],
+      "fingerprint": "sha256:4f3968745d114158ba6d3b12d220e2c0bc043adddaa67efd8b48918a36be967f",
+      "msrName": "月明人间",
+      "prtsTitle": "月明人间",
+      "releaseDate": "2026-09-25"
+    },
     "1015": {
       "artists": [
         "塞壬唱片-MSR"
@@ -2831,6 +2840,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-09-22T19:54:00.445313+00:00",
+  "generatedAt": "2026-09-26T00:21:18.734909+00:00",
   "version": 2
 }
