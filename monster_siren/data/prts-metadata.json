@@ -1420,6 +1420,15 @@
       "prtsTitle": "多索雷斯假日OST",
       "releaseDate": "2022-07-27"
     },
+    "4596": {
+      "artists": [
+        "塞壬唱片-MSR"
+      ],
+      "fingerprint": "sha256:08f404791c1ea335a452ea8dc67c68413c9a927cbba51610e7bfbc25405c96f4",
+      "msrName": "矢量突破拟生态OST",
+      "prtsTitle": "矢量突破拟生态OST",
+      "releaseDate": "2026-10-02"
+    },
     "5100": {
       "artists": [
         "塞壬唱片-MSR",
@@ -2840,6 +2849,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-09-26T00:21:18.734909+00:00",
+  "generatedAt": "2026-10-03T00:23:50.230562+00:00",
   "version": 2
 }
