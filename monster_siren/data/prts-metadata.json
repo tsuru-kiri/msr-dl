@@ -1,5 +1,15 @@
 {
   "albums": {
+    "0227": {
+      "artists": [
+        "塞壬唱片-MSR",
+        "何美臻 (Min He)"
+      ],
+      "fingerprint": "sha256:79b641c1acca0c27259eceda56ed6085dff4794abbce362c070e911bd1508e2f",
+      "msrName": "大地之盐",
+      "prtsTitle": "大地之盐",
+      "releaseDate": "2026-10-09"
+    },
     "0230": {
       "artists": [
         "塞壬唱片-MSR"
@@ -2849,6 +2859,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-10-03T00:23:50.230562+00:00",
+  "generatedAt": "2026-10-10T00:27:42.233162+00:00",
   "version": 2
 }
