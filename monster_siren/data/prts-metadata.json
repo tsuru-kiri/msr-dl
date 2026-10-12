@@ -2300,6 +2300,15 @@
       "prtsTitle": "El Brillo Solitario",
       "releaseDate": "2020-08-12"
     },
+    "8913": {
+      "artists": [
+        "塞壬唱片-MSR"
+      ],
+      "fingerprint": "sha256:48c8a07c0f2ceda10fe4f80fc7c273f6d49f8081e0621d40a850f735c3d2fa8d",
+      "msrName": "昨日海OST",
+      "prtsTitle": "昨日海OST",
+      "releaseDate": "2026-10-11"
+    },
     "8920": {
       "artists": [
         "塞壬唱片-MSR"
@@ -2859,6 +2868,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-10-10T00:27:42.233162+00:00",
+  "generatedAt": "2026-10-12T00:27:24.797960+00:00",
   "version": 2
 }
