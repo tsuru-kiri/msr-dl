@@ -583,6 +583,16 @@
       "prtsTitle": "Sparkling Hydraulics",
       "releaseDate": "2020-05-03"
     },
+    "2431": {
+      "artists": [
+        "塞壬唱片-MSR",
+        "Chapters / Ben Hicks / Sofia Silvestri"
+      ],
+      "fingerprint": "sha256:45f4a53484de4a749fa299520d0035eaa14943d3e569a48690a0a15529fa0838",
+      "msrName": "A Necessary Message",
+      "prtsTitle": "A Necessary Message",
+      "releaseDate": "2026-10-29"
+    },
     "2440": {
       "artists": [
         "塞壬唱片-MSR",
@@ -2868,6 +2878,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-10-12T00:27:24.797960+00:00",
+  "generatedAt": "2026-10-30T05:20:40.730062+00:00",
   "version": 2
 }
