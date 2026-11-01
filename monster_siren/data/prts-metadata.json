@@ -296,6 +296,16 @@
       "prtsTitle": "Under Tides",
       "releaseDate": "2021-11-04"
     },
+    "1005": {
+      "artists": [
+        "塞壬唱片-MSR",
+        "Julia Avrutskaia / Sterling Maffe"
+      ],
+      "fingerprint": "sha256:6363e2dac97d12634b5c1defbc2276cf8cfa071f8ff87a93864b7ec1b959174e",
+      "msrName": "Тысячу лет спустя",
+      "prtsTitle": "Тысячу лет спустя",
+      "releaseDate": "2026-11-01"
+    },
     "1010": {
       "artists": [
         "塞壬唱片-MSR",
@@ -2878,6 +2888,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-10-30T05:20:40.730062+00:00",
+  "generatedAt": "2026-11-01T05:35:12.888562+00:00",
   "version": 2
 }
