@@ -971,6 +971,16 @@
       "prtsTitle": "Spark for Dream",
       "releaseDate": "2022-02-15"
     },
+    "3870": {
+      "artists": [
+        "塞壬唱片-MSR",
+        "Denys Lyubimov. / 迪悗 / z1on / 无糖宁宁子 / ReStudio"
+      ],
+      "fingerprint": "sha256:6b93f80e3b5d8bbc42bd505c6af1bcab74abc4caf49b6358b828daf5c63db365",
+      "msrName": "[classified]entity.dominion.turmoil",
+      "prtsTitle": "[classified]entity.dominion.turmoil",
+      "releaseDate": "2026-11-02"
+    },
     "3880": {
       "artists": [
         "塞壬唱片-MSR",
@@ -2888,6 +2898,6 @@
       "releaseDate": "2022-05-13"
     }
   },
-  "generatedAt": "2026-11-01T05:35:12.888562+00:00",
+  "generatedAt": "2026-11-03T06:12:52.383947+00:00",
   "version": 2
 }
